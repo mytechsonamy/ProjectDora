@@ -1,0 +1,158 @@
+# --- Required Fields ---
+story_id: "US-202"
+title: "Add typed fields to content types"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.2"
+sprint: "S02"
+priority: "P1"
+
+# --- User Story Statement ---
+role: "As a TenantAdmin"
+action: "I want to add various field types (text, number, boolean, file/image, rich text) to content types"
+benefit: "So that each content type has the appropriate data structure for its domain"
+
+# --- Interface Contract ---
+inputs:
+  - name: "typeName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100)"
+    example: "DestekProgrami"
+  - name: "fieldName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100), Matches('^[A-Za-z][A-Za-z0-9]*$')"
+    example: "ProgramButcesi"
+  - name: "fieldType"
+    type: "string"
+    required: true
+    validation: "NotEmpty, OneOf('TextField', 'NumericField', 'BooleanField', 'MediaField', 'ContentPickerField', 'DateField', 'HtmlField', 'LinkField')"
+    example: "NumericField"
+  - name: "required"
+    type: "bool"
+    required: false
+    validation: ""
+    example: true
+  - name: "settings"
+    type: "object"
+    required: false
+    validation: ""
+    example: "{\"hint\": \"Program butcesini TL cinsinden giriniz\", \"scale\": 2}"
+
+outputs:
+  - name: "contentType"
+    type: "ContentTypeDto"
+    description: "Updated content type definition including the new field"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentModeling.Manage"
+      - "ContentModeling.Edit"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+  data_model:
+    content_type: "ContentTypeDefinition"
+    parts: []
+    fields:
+      - "TextField"
+      - "NumericField"
+      - "BooleanField"
+      - "MediaField"
+      - "HtmlField"
+      - "ContentPickerField"
+      - "DateField"
+      - "LinkField"
+  api:
+    endpoint: "PUT /api/v1/content-types/{typeName}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Field added to content type"
+      - 400: "Validation error (invalid field name or type)"
+      - 403: "User lacks ContentModeling.Edit permission"
+      - 404: "Content type not found"
+      - 409: "Field name already exists on this content type"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Add TextField to content type"
+    given: "Content type 'DestekProgrami' exists and user has TenantAdmin role"
+    when: "User adds a field with name='ProgramAdi', type='TextField'"
+    then: "Content type updated with new TextField, API returns 200"
+
+  - id: "AT-002"
+    scenario: "Add NumericField with settings"
+    given: "Content type 'DestekProgrami' exists"
+    when: "User adds field name='Butce', type='NumericField', settings={scale: 2, minimum: 0}"
+    then: "NumericField added with decimal scale and minimum constraint"
+
+  - id: "AT-003"
+    scenario: "Add BooleanField to content type"
+    given: "Content type 'DestekProgrami' exists"
+    when: "User adds field name='AktifMi', type='BooleanField'"
+    then: "BooleanField added with default false value"
+
+  - id: "AT-004"
+    scenario: "Reject duplicate field name"
+    given: "Content type 'DestekProgrami' already has a field named 'ProgramAdi'"
+    when: "User attempts to add another field named 'ProgramAdi'"
+    then: "System returns 409 Conflict"
+
+  - id: "AT-005"
+    scenario: "Add MediaField for file/image support"
+    given: "Content type 'DestekProgrami' exists"
+    when: "User adds field name='ProgramGorseli', type='MediaField', settings={multiple: false}"
+    then: "MediaField added, linked to media library for file selection"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Invalid field type name"
+    input: "fieldType = 'RichTextField' (not a valid Orchard Core field type)"
+    expected: "API returns 400 with validation error listing valid field types"
+
+  - id: "EC-002"
+    scenario: "Field name starting with number"
+    input: "fieldName = '1Alan'"
+    expected: "API returns 400 — field name must match ^[A-Za-z][A-Za-z0-9]*$"
+
+  - id: "EC-003"
+    scenario: "Adding field to non-existent content type"
+    input: "typeName = 'NonExistentType'"
+    expected: "API returns 404 Not Found"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands:
+    - "AddFieldToContentTypeCommand"
+    - "AddFieldToContentTypeCommandHandler"
+    - "RemoveFieldFromContentTypeCommand"
+    - "RemoveFieldFromContentTypeCommandHandler"
+  mediatr_queries: []
+  audit_events:
+    - "ContentTypeFieldAdded"
+    - "ContentTypeFieldRemoved"
+  localization_keys:
+    - "ContentModeling.Field.Added.Success"
+    - "ContentModeling.Field.Validation.NameRequired"
+    - "ContentModeling.Field.Validation.TypeInvalid"
+    - "ContentModeling.Field.Validation.NameDuplicate"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "contenttype:{tenantId}:{typeName}"
+    ttl: "30m"

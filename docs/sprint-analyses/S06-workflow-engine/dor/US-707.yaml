@@ -1,0 +1,134 @@
+# US-707: Custom Activities with Entity Access
+# Spec: 4.1.7.5 - Urun uzerinde yer alan farkli tipteki aktivitelerin kendi gorevleri
+#       dogrultusunda basit yapilandirmalar veya kodsal cesitli duzenlemeler ile kendileri
+#       ile iliskili turlere (icerikler, sql sorgulari) dogrudan erisiminin olmasi
+
+story_id: "US-707"
+title: "Custom activities with direct access to content items and SQL queries"
+module: "ProjectDora.Modules.Workflows"
+spec_refs:
+  - "4.1.7.5"
+sprint: "S06"
+priority: "P1"
+
+role: "As a WorkflowAdmin"
+action: "I want workflow activities to access content items and SQL queries directly"
+benefit: "So that workflows can read, transform, and act on platform data as part of automated processes"
+
+inputs:
+  - name: "activityType"
+    type: "string"
+    required: true
+    validation: "NotEmpty, OneOf('RunQueryActivity', 'ContentLookupActivity', 'ContentTransformActivity')"
+    example: "RunQueryActivity"
+  - name: "queryId"
+    type: "string"
+    required: false
+    validation: "NotEmpty (when activityType=RunQueryActivity)"
+    example: "query-kobi-destekler-001"
+  - name: "contentItemId"
+    type: "string"
+    required: false
+    validation: "NotEmpty (when activityType=ContentLookupActivity)"
+    example: "{{ Context.contentItemId }}"
+  - name: "contentType"
+    type: "string"
+    required: false
+    validation: ""
+    example: "DestekProgrami"
+  - name: "propertyMappings"
+    type: "Dictionary<string, string>"
+    required: false
+    validation: ""
+    example: '{"targetField": "{{ QueryResult.Rows[0].program_adi }}"}'
+
+outputs:
+  - name: "queryResult"
+    type: "QueryResultDto"
+    description: "Result of SQL query execution (for RunQueryActivity)"
+  - name: "contentItem"
+    type: "ContentItemDto"
+    description: "Retrieved content item (for ContentLookupActivity)"
+  - name: "transformedData"
+    type: "object"
+    description: "Transformed data based on property mappings"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Workflow.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+  data_model:
+    content_type: "WorkflowDef"
+    parts:
+      - "WorkflowDefPart"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/workflows/{workflowId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Custom activity configured"
+      - 400: "Invalid activity configuration (missing queryId, invalid contentType)"
+      - 403: "User lacks Workflow.Manage permission"
+
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "RunQueryActivity executes saved SQL query"
+    given: "Workflow contains RunQueryActivity with queryId referencing saved query 'KOBIDestekRaporu'"
+    when: "Workflow execution reaches RunQueryActivity"
+    then: "Query executed via IQueryService, results stored in workflow context as QueryResult, outcome=Done"
+  - id: "AT-002"
+    scenario: "ContentLookupActivity retrieves content item"
+    given: "Workflow contains ContentLookupActivity with contentItemId from trigger context"
+    when: "Workflow execution reaches ContentLookupActivity"
+    then: "Content item retrieved via IContentService, full item data available in context, outcome=Done"
+  - id: "AT-003"
+    scenario: "Custom activity chains: lookup content then run query"
+    given: "Workflow has ContentLookupActivity -> RunQueryActivity pipeline, query uses content field as parameter"
+    when: "Workflow triggers with contentItemId"
+    then: "Content looked up, its field value passed as query parameter, query results available for subsequent activities"
+  - id: "AT-004"
+    scenario: "RunQueryActivity with failed query"
+    given: "RunQueryActivity references a query that has been deleted"
+    when: "Workflow execution reaches RunQueryActivity"
+    then: "Activity returns outcome=Failed, error='Query not found: query-id', workflow context updated"
+
+edge_cases:
+  - id: "EC-001"
+    scenario: "RunQueryActivity with non-existent query"
+    input: "queryId = 'non-existent-query-id'"
+    expected: "Activity returns outcome=Failed with descriptive error, workflow continues on Failed branch if connected"
+  - id: "EC-002"
+    scenario: "ContentLookupActivity with deleted content item"
+    input: "contentItemId references soft-deleted content item"
+    expected: "Activity returns outcome=Failed, error='Content item not found or deleted'"
+  - id: "EC-003"
+    scenario: "RunQueryActivity accessing query from different tenant"
+    input: "queryId belongs to Tenant B, workflow runs in Tenant A context"
+    expected: "Activity returns outcome=Failed, tenant isolation prevents cross-tenant query access"
+
+dependencies:
+  stories: ["US-701", "US-705", "US-501"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Workflows", "ProjectDora.Modules.QueryEngine"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IWorkflowService"
+  mediatr_commands: []
+  mediatr_queries: []
+  audit_events:
+    - "WorkflowActivityExecuted"
+  localization_keys:
+    - "Workflow.Activity.RunQuery"
+    - "Workflow.Activity.ContentLookup"
+    - "Workflow.Activity.ContentTransform"
+    - "Workflow.Activity.QueryNotFound"
+    - "Workflow.Activity.ContentNotFound"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

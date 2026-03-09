@@ -1,0 +1,127 @@
+# --- Required Fields ---
+story_id: "US-209"
+title: "List mode - content types containing lists of other types"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.10"
+sprint: "S02"
+priority: "P2"
+
+# --- User Story Statement ---
+role: "As a TenantAdmin"
+action: "I want custom content types to contain lists of other custom content types"
+benefit: "So that I can model hierarchical data structures (e.g., a Program page containing a list of FAQ items)"
+
+# --- Interface Contract ---
+inputs:
+  - name: "parentTypeName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100)"
+    example: "DestekProgrami"
+  - name: "childTypeNames"
+    type: "List<string>"
+    required: true
+    validation: "NotEmpty"
+    example: "[\"SSS\", \"BasvuruAdimi\"]"
+  - name: "partName"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "BagPart"
+
+outputs:
+  - name: "contentType"
+    type: "ContentTypeDto"
+    description: "Parent content type with BagPart/ListPart configured for child types"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentModeling.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+  data_model:
+    content_type: "ContentTypeDefinition"
+    parts:
+      - "BagPart"
+      - "ListPart"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/content-types/{typeName}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "List/bag part configured on content type"
+      - 400: "Validation error (circular reference, invalid child type)"
+      - 403: "User lacks ContentModeling.Manage permission"
+      - 404: "Parent or child content type not found"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Add BagPart to content type with allowed child types"
+    given: "Content types 'DestekProgrami' and 'SSS' both exist"
+    when: "Admin adds BagPart to 'DestekProgrami' with allowed child type 'SSS'"
+    then: "BagPart added, editor can add SSS items within a DestekProgrami content item"
+
+  - id: "AT-002"
+    scenario: "Add multiple child items to bag"
+    given: "DestekProgrami has BagPart allowing SSS and BasvuruAdimi types"
+    when: "Editor adds 3 SSS items and 2 BasvuruAdimi items to a DestekProgrami"
+    then: "All 5 child items stored within the parent, retrievable via API with parent reference"
+
+  - id: "AT-003"
+    scenario: "Remove child item from bag"
+    given: "DestekProgrami contains 3 SSS child items"
+    when: "Editor removes 1 SSS item from the bag"
+    then: "2 SSS items remain, removed item is deleted or detached (based on configuration)"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Circular reference prevention"
+    input: "Type A contains BagPart allowing Type B, Type B tries to add BagPart allowing Type A"
+    expected: "System warns about circular reference but allows it (circular bags are valid in Orchard Core)"
+
+  - id: "EC-002"
+    scenario: "Empty bag part"
+    input: "Content item with BagPart but no child items added"
+    expected: "Content item valid, API returns empty array for bag items, admin form shows 'add item' button"
+
+  - id: "EC-003"
+    scenario: "Child type deleted while parent references it"
+    input: "Type 'SSS' is deleted while 'DestekProgrami' has BagPart allowing 'SSS'"
+    expected: "Existing SSS children in bags remain but no new SSS items can be added. Admin shows warning about orphaned configuration."
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands:
+    - "ConfigureBagPartCommand"
+    - "ConfigureBagPartCommandHandler"
+  mediatr_queries:
+    - "GetBagChildrenQuery"
+    - "GetBagChildrenQueryHandler"
+  audit_events:
+    - "ContentTypeBagPartConfigured"
+  localization_keys:
+    - "ContentModeling.BagPart.ChildTypes"
+    - "ContentModeling.BagPart.AddChild"
+    - "ContentModeling.BagPart.RemoveChild"
+    - "ContentModeling.BagPart.CircularWarning"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "contenttype:{tenantId}:{typeName}"
+    ttl: "30m"

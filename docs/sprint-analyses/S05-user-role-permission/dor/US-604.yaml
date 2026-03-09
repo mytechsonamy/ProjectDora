@@ -1,0 +1,115 @@
+# US-604: Define platform-wide permissions on roles
+story_id: "US-604"
+title: "Define platform-wide permissions on roles"
+module: "ProjectDora.Modules.UserManagement"
+spec_refs:
+  - "4.1.6.2"
+sprint: "S05"
+priority: "P0"
+
+role: "As a TenantAdmin"
+action: "I want to assign platform-wide permissions to roles controlling admin panel access and module features"
+benefit: "So that I can restrict which admin panel sections and platform capabilities each role can access"
+
+inputs:
+  - name: "roleId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "role-destek-yoneticisi"
+  - name: "permissions"
+    type: "List<string>"
+    required: true
+    validation: "NotEmpty, each permission must be a registered platform permission"
+    example: '["AdminPanel.Access", "ContentManagement.Create", "ContentManagement.EditOwn", "ContentManagement.Publish", "QueryEngine.Execute"]'
+
+outputs:
+  - name: "roleId"
+    type: "string"
+    description: "Role ID whose permissions were updated"
+  - name: "permissions"
+    type: "List<string>"
+    description: "Updated list of all permissions (platform-wide + content-type-specific)"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "UserRolePermission.ManageRoles"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "Role"
+    parts: []
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/roles/{roleId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Role permissions updated"
+      - 400: "Validation error (invalid permission name)"
+      - 403: "User lacks UserRolePermission.ManageRoles permission"
+      - 404: "Role not found"
+
+acceptance_tests:
+  - id: "AT-604-01"
+    scenario: "Assign platform-wide permissions to role"
+    given: "Role 'Destek Yoneticisi' exists with no permissions"
+    when: "TenantAdmin assigns ['AdminPanel.Access', 'ContentManagement.Create', 'ContentManagement.Publish']"
+    then: "Role now has 3 platform permissions, users with this role can access admin panel, create and publish content"
+  - id: "AT-604-02"
+    scenario: "Permission check enforces access control"
+    given: "User 'editor-001' has role with only ContentManagement.Create permission"
+    when: "User attempts to publish content (requires ContentManagement.Publish)"
+    then: "API returns 403 Forbidden — missing Publish permission"
+  - id: "AT-604-03"
+    scenario: "List all available platform permissions"
+    given: "TenantAdmin is authenticated"
+    when: "TenantAdmin requests GET /api/v1/roles/permissions"
+    then: "API returns grouped list of all registered permissions: UserRolePermission.*, ContentManagement.*, QueryEngine.*, Workflow.*, AuditTrail.*"
+  - id: "AT-604-04"
+    scenario: "Remove permissions from role"
+    given: "Role has permissions ['AdminPanel.Access', 'ContentManagement.Create']"
+    when: "TenantAdmin sends update with only ['AdminPanel.Access']"
+    then: "ContentManagement.Create removed, users with this role can no longer create content"
+
+edge_cases:
+  - id: "EC-604-01"
+    scenario: "Assign non-existent permission"
+    input: "permissions = ['FakeModule.FakeAction']"
+    expected: "API returns 400 — permission 'FakeModule.FakeAction' is not registered in the platform"
+  - id: "EC-604-02"
+    scenario: "Empty permissions list (remove all)"
+    input: "permissions = []"
+    expected: "All permissions removed from role, role becomes effectively empty (users with this role have no access)"
+  - id: "EC-604-03"
+    scenario: "Concurrent permission updates"
+    input: "Two admins update same role permissions simultaneously"
+    expected: "Last-write-wins with optimistic concurrency check; second request gets 409 if role was modified"
+
+dependencies:
+  stories: ["US-602"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.UserManagement"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IRoleService"
+  mediatr_commands:
+    - "UpdateRolePermissionsCommand"
+    - "UpdateRolePermissionsCommandHandler"
+  mediatr_queries:
+    - "ListPermissionsQuery"
+    - "ListPermissionsQueryHandler"
+  audit_events:
+    - "RolePermissionsUpdated"
+  localization_keys:
+    - "Role.Permissions.Updated.Success"
+    - "Role.Permissions.Validation.InvalidPermission"
+    - "Role.Permissions.Validation.EmptyWarning"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "role:{tenantId}:{roleId}:permissions"
+    ttl: "10m"

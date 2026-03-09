@@ -1,0 +1,117 @@
+# US-608: Enable/disable user accounts
+story_id: "US-608"
+title: "Enable and disable user accounts"
+module: "ProjectDora.Modules.UserManagement"
+spec_refs:
+  - "4.1.6.1"
+sprint: "S05"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want to enable or disable user accounts"
+benefit: "So that I can temporarily suspend access for users without deleting their accounts and losing their data"
+
+inputs:
+  - name: "userId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "user-mehmet-001"
+  - name: "enabled"
+    type: "bool"
+    required: true
+    validation: ""
+    example: false
+
+outputs:
+  - name: "userId"
+    type: "string"
+    description: "User ID whose status was updated"
+  - name: "enabled"
+    type: "bool"
+    description: "New enabled/disabled status"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "UserRolePermission.ManageUsers"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "User"
+    parts:
+      - "UserProfile"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/users/{userId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "User status updated"
+      - 403: "User lacks UserRolePermission.ManageUsers permission"
+      - 404: "User not found"
+
+acceptance_tests:
+  - id: "AT-608-01"
+    scenario: "Disable user blocks login"
+    given: "User 'mehmet-001' is enabled and has valid credentials"
+    when: "TenantAdmin sets enabled=false for 'mehmet-001'"
+    then: "User 'mehmet-001' cannot obtain new tokens via POST /api/v1/auth/token, returns 401"
+  - id: "AT-608-02"
+    scenario: "Disable user invalidates active sessions"
+    given: "User 'mehmet-001' has an active JWT token"
+    when: "TenantAdmin disables 'mehmet-001'"
+    then: "Existing token is rejected on next API call (via token validation or session blacklist)"
+  - id: "AT-608-03"
+    scenario: "Re-enable user restores access"
+    given: "User 'mehmet-001' is disabled"
+    when: "TenantAdmin sets enabled=true for 'mehmet-001'"
+    then: "User can login again, all previous roles and permissions intact"
+  - id: "AT-608-04"
+    scenario: "Cannot disable own account"
+    given: "TenantAdmin is authenticated as 'admin-001'"
+    when: "TenantAdmin attempts to disable their own account 'admin-001'"
+    then: "API returns 400 — cannot disable your own account"
+
+edge_cases:
+  - id: "EC-608-01"
+    scenario: "Disable last SuperAdmin"
+    input: "Only one SuperAdmin exists in the platform, attempt to disable them"
+    expected: "API returns 400 — cannot disable the last SuperAdmin (safety guard to prevent lockout)"
+  - id: "EC-608-02"
+    scenario: "Disable user with active workflow executions"
+    input: "User 'mehmet-001' has 3 running workflow executions assigned to them"
+    expected: "User disabled successfully, workflow executions continue to completion (owned by system), warning returned in response"
+  - id: "EC-608-03"
+    scenario: "Tenant isolation for enable/disable"
+    input: "TenantAdmin in tenant-a tries to disable user in tenant-b"
+    expected: "API returns 404 — user not found (tenant-scoped query, cross-tenant user not visible)"
+
+dependencies:
+  stories: ["US-601"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.UserManagement"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IUserService"
+  mediatr_commands:
+    - "EnableUserCommand"
+    - "EnableUserCommandHandler"
+    - "DisableUserCommand"
+    - "DisableUserCommandHandler"
+  mediatr_queries: []
+  audit_events:
+    - "UserEnabled"
+    - "UserDisabled"
+  localization_keys:
+    - "User.Enabled.Success"
+    - "User.Disabled.Success"
+    - "User.Validation.CannotDisableSelf"
+    - "User.Validation.CannotDisableLastSuperAdmin"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "user:{tenantId}:{userId}:status"
+    ttl: "5m"

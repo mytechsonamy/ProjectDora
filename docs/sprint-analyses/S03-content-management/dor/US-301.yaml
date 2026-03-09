@@ -1,0 +1,200 @@
+# --- Required Fields ---
+story_id: "US-301"
+title: "Content item CRUD operations (create, read, update, delete, clone)"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.3.1"
+sprint: "S03"
+priority: "P1"
+
+# --- User Story Statement ---
+role: "As an Editor"
+action: "I want to create, read, update, delete, and clone content items of any defined content type"
+benefit: "So that I can manage KOSGEB program information and announcements"
+
+# --- Interface Contract ---
+inputs:
+  - name: "contentType"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100), Matches('^[A-Za-z][A-Za-z0-9]*$')"
+    example: "DestekProgrami"
+  - name: "displayText"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(500)"
+    example: "KOBİ Teknoloji Geliştirme Desteği 2026"
+  - name: "parts"
+    type: "object"
+    required: false
+    validation: ""
+    example: '{"TitlePart": {"Title": "KOBİ Teknoloji Geliştirme Desteği 2026"}, "BodyPart": {"Body": "<p>Bu program kapsamında KOBİ''lere teknoloji geliştirme desteği sağlanmaktadır.</p>"}}'
+  - name: "fields"
+    type: "object"
+    required: false
+    validation: ""
+    example: '{"ProgramAdi": {"Text": "KOBİ Teknoloji Geliştirme"}, "Butce": {"Value": 5000000}}'
+  - name: "published"
+    type: "bool"
+    required: false
+    validation: ""
+    example: false
+  - name: "culture"
+    type: "string"
+    required: false
+    validation: "MaxLength(10)"
+    example: "tr"
+
+outputs:
+  - name: "contentItemId"
+    type: "string"
+    description: "Unique ID of the content item"
+  - name: "contentType"
+    type: "string"
+    description: "Content type name"
+  - name: "displayText"
+    type: "string"
+    description: "Display title of the content item"
+  - name: "status"
+    type: "string"
+    description: "Content status: Draft, Published, Archived, or Scheduled"
+  - name: "version"
+    type: "int"
+    description: "Version number (starts at 1)"
+  - name: "owner"
+    type: "string"
+    description: "User ID of the content owner"
+  - name: "createdUtc"
+    type: "DateTime"
+    description: "Creation timestamp"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentManagement.Create"
+      - "ContentManagement.EditOwn"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Analyst"
+      - "Denetci"
+      - "SEOUzmani"
+  data_model:
+    content_type: "dynamic"
+    parts:
+      - "TitlePart"
+      - "BodyPart"
+      - "CommonPart"
+      - "AuditTrailPart"
+    fields: []
+  api:
+    endpoint: "POST /api/v1/content/{contentType}"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "Content item created successfully"
+      - 400: "Validation error (missing required fields, invalid content type)"
+      - 403: "User lacks ContentManagement.Create permission"
+      - 404: "Content type not found"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Create content item as draft"
+    given: "User has Editor role and content type 'DestekProgrami' exists with TitlePart and BodyPart"
+    when: "User submits POST /api/v1/content/DestekProgrami with displayText='KOBİ Teknoloji Desteği' and published=false"
+    then: "System returns 201 with ContentItemDto containing status=Draft, version=1, and a valid contentItemId"
+
+  - id: "AT-002"
+    scenario: "Read content item by ID"
+    given: "Content item with ID 'abc123' exists and user has ContentManagement.ViewDraft permission"
+    when: "User submits GET /api/v1/content/DestekProgrami/abc123"
+    then: "System returns 200 with full ContentItemDto including parts and fields data"
+
+  - id: "AT-003"
+    scenario: "Update content item creates new version"
+    given: "Content item exists with version=1 and user has ContentManagement.EditOwn permission and is the owner"
+    when: "User submits PUT /api/v1/content/DestekProgrami/abc123 with updated body text"
+    then: "System returns 200 with version=2, original version=1 preserved in history"
+
+  - id: "AT-004"
+    scenario: "Delete content item (soft delete)"
+    given: "Content item exists and user has ContentManagement.Delete permission"
+    when: "User submits DELETE /api/v1/content/DestekProgrami/abc123"
+    then: "System returns 204, item is soft-deleted (not visible in list but exists in database)"
+
+  - id: "AT-005"
+    scenario: "Clone content item"
+    given: "Content item 'abc123' exists with parts and fields data"
+    when: "User submits POST /api/v1/content/DestekProgrami with cloneFrom=abc123"
+    then: "System creates a new content item with same parts/fields data, new contentItemId, status=Draft, owner=current user"
+
+  - id: "AT-006"
+    scenario: "List content items with pagination"
+    given: "25 DestekProgrami content items exist"
+    when: "User submits GET /api/v1/content/DestekProgrami?page=1&pageSize=10&sortBy=modifiedUtc&sortOrder=desc"
+    then: "System returns 200 with 10 items, totalCount=25, page=1, pageSize=10"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Turkish special characters in displayText and body"
+    input: "displayText = 'Şırnak İlçesi Küçük Ölçekli Girişimci Desteği', body contains ç, ğ, ı, ö, ş, ü characters"
+    expected: "Content created successfully, all Turkish characters preserved in storage and retrieval"
+
+  - id: "EC-002"
+    scenario: "Create content item for non-existent content type"
+    input: "contentType = 'NonExistentType'"
+    expected: "API returns 404 with ProblemDetails explaining content type not found"
+
+  - id: "EC-003"
+    scenario: "Maximum length body content with HTML"
+    input: "body = 50,000 character Turkish HTML content with nested elements"
+    expected: "Content created successfully, HTML preserved without truncation or sanitization loss"
+
+  - id: "EC-004"
+    scenario: "Concurrent updates to same content item"
+    input: "Two users submit PUT for the same contentItemId simultaneously"
+    expected: "Both updates succeed as separate versions (optimistic concurrency via versioning)"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201", "US-202", "US-206"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentService"
+  mediatr_commands:
+    - "CreateContentItemCommand"
+    - "CreateContentItemCommandHandler"
+    - "UpdateContentItemCommand"
+    - "UpdateContentItemCommandHandler"
+    - "DeleteContentItemCommand"
+    - "DeleteContentItemCommandHandler"
+    - "CloneContentItemCommand"
+    - "CloneContentItemCommandHandler"
+  mediatr_queries:
+    - "GetContentItemQuery"
+    - "GetContentItemQueryHandler"
+    - "ListContentItemsQuery"
+    - "ListContentItemsQueryHandler"
+  audit_events:
+    - "ContentItemCreated"
+    - "ContentItemUpdated"
+    - "ContentItemDeleted"
+    - "ContentItemCloned"
+  localization_keys:
+    - "Content.Created.Success"
+    - "Content.Updated.Success"
+    - "Content.Deleted.Success"
+    - "Content.Cloned.Success"
+    - "Content.Validation.DisplayTextRequired"
+    - "Content.Validation.ContentTypeNotFound"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "content:{tenantId}:{contentType}:{contentItemId}"
+    ttl: "5m"

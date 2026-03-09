@@ -1,0 +1,153 @@
+# US-801: Supported Culture Configuration
+# Spec: 4.1.8.1 — Language activation/deactivation via admin panel
+
+story_id: "US-801"
+title: "Activate and deactivate supported languages from admin panel"
+module: "ProjectDora.Modules.Localization"
+spec_refs:
+  - "4.1.8.1"
+sprint: "S07"
+priority: "P0"
+
+role: "As a TenantAdmin"
+action: "I want to activate or deactivate supported languages for my tenant from the admin panel"
+benefit: "So that editors can create content in the correct languages and the platform publishes in exactly the configured set of cultures"
+
+inputs:
+  - name: "culture"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(10), Matches('^[a-z]{2}(-[A-Z]{2})?$')"
+    example: "tr"
+  - name: "displayName"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "Türkçe"
+  - name: "isDefault"
+    type: "bool"
+    required: false
+    validation: ""
+    example: true
+
+outputs:
+  - name: "culture"
+    type: "string"
+    description: "The activated culture code"
+  - name: "displayName"
+    type: "string"
+    description: "Human-readable culture name"
+  - name: "isDefault"
+    type: "bool"
+    description: "Whether this is the tenant's default culture"
+  - name: "isActive"
+    type: "bool"
+    description: "Activation status of the culture"
+  - name: "activatedUtc"
+    type: "DateTime"
+    description: "Timestamp when culture was activated"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Localization.ManageCultures"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "SiteCultureSettings"
+    parts:
+      - "SiteSettings (YesSql)"
+    fields:
+      - "DefaultCulture"
+      - "SupportedCultures"
+      - "IsRtl"
+  api:
+    endpoint: "POST /api/v1/localization/cultures"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "Culture activated successfully"
+      - 400: "Invalid culture code format"
+      - 403: "User lacks Localization.ManageCultures permission"
+      - 409: "Culture is already active for this tenant"
+
+acceptance_tests:
+  - id: "AT-801-001"
+    scenario: "Activate a new supported language"
+    given: "Tenant has only Turkish ('tr') active and user has TenantAdmin role"
+    when: "TenantAdmin activates English ('en') with displayName 'İngilizce'"
+    then: "Culture 'en' appears in supported cultures list, audit event CultureActivated emitted, editors can now create English content variants"
+  - id: "AT-801-002"
+    scenario: "Deactivate a non-default supported language"
+    given: "Tenant has Turkish ('tr') and English ('en') active, 'tr' is default"
+    when: "TenantAdmin deactivates English ('en')"
+    then: "Culture 'en' is removed from supported cultures, existing English content variants are retained (not deleted), new English translations cannot be created"
+  - id: "AT-801-003"
+    scenario: "Cannot deactivate the default culture"
+    given: "Turkish ('tr') is the default culture"
+    when: "TenantAdmin attempts to deactivate 'tr'"
+    then: "API returns 400 Bad Request with message 'Varsayilan dil devre disi birakilamaz'"
+  - id: "AT-801-004"
+    scenario: "Unauthorized user cannot manage cultures"
+    given: "User has Editor role"
+    when: "User attempts to activate a new culture via API"
+    then: "API returns 403 Forbidden"
+  - id: "AT-801-005"
+    scenario: "List all active cultures for tenant"
+    given: "Tenant has Turkish ('tr') and English ('en') active"
+    when: "Any authenticated user calls GET /api/v1/localization/cultures"
+    then: "Response lists both cultures with their displayName, isDefault, and isRtl flags"
+
+edge_cases:
+  - id: "EC-801-001"
+    scenario: "Activate already active culture"
+    input: "culture = 'tr' (already active as default)"
+    expected: "API returns 409 Conflict — 'Bu dil zaten aktif: tr'"
+  - id: "EC-801-002"
+    scenario: "Invalid culture code format"
+    input: "culture = 'turkish' (not a valid BCP-47 code)"
+    expected: "API returns 400 Bad Request — 'Gecersiz dil kodu formatı. Ornek: tr, tr-TR, en, en-US'"
+  - id: "EC-801-003"
+    scenario: "Tenant isolation — Tenant A cannot see Tenant B cultures"
+    input: "TenantAdmin of Tenant A calls GET /api/v1/localization/cultures"
+    expected: "Response contains only Tenant A's cultures, not Tenant B's"
+
+dependencies:
+  stories: ["US-101", "US-601"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Localization"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "ICultureService"
+  mediatr_commands:
+    - "ActivateCultureCommand"
+    - "ActivateCultureCommandHandler"
+    - "DeactivateCultureCommand"
+    - "DeactivateCultureCommandHandler"
+    - "SetDefaultCultureCommand"
+    - "SetDefaultCultureCommandHandler"
+  mediatr_queries:
+    - "GetSupportedCulturesQuery"
+    - "GetSupportedCulturesQueryHandler"
+    - "GetCultureSettingsQuery"
+    - "GetCultureSettingsQueryHandler"
+  audit_events:
+    - "CultureActivated"
+    - "CultureDeactivated"
+    - "DefaultCultureChanged"
+  localization_keys:
+    - "Culture.Activated.Success"
+    - "Culture.Deactivated.Success"
+    - "Culture.DefaultChanged.Success"
+    - "Culture.Validation.InvalidCode"
+    - "Culture.Validation.AlreadyActive"
+    - "Culture.Validation.CannotDeactivateDefault"
+    - "Culture.Validation.NotFound"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "localization:cultures:{tenantId}"
+    ttl: "1h"

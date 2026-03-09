@@ -1,0 +1,144 @@
+# --- Required Fields ---
+story_id: "US-201"
+title: "Create new content types with field definitions"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.1"
+sprint: "S02"
+priority: "P1"
+
+# --- User Story Statement ---
+role: "As a TenantAdmin"
+action: "I want to design and create new content types with different field types"
+benefit: "So that I can model domain-specific data structures for KOSGEB programs"
+
+# --- Interface Contract ---
+inputs:
+  - name: "name"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100), Matches('^[A-Za-z][A-Za-z0-9]*$')"
+    example: "DestekProgrami"
+  - name: "displayName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(200)"
+    example: "Destek Programi"
+  - name: "stereotype"
+    type: "string"
+    required: false
+    validation: "MaxLength(50)"
+    example: "CustomType"
+  - name: "parts"
+    type: "List<string>"
+    required: false
+    validation: ""
+    example: "[\"TitlePart\", \"BodyPart\", \"CommonPart\"]"
+  - name: "fields"
+    type: "List<ContentFieldDefinition>"
+    required: false
+    validation: ""
+    example: "[{\"name\": \"ProgramAdi\", \"type\": \"TextField\", \"required\": true}]"
+
+outputs:
+  - name: "contentType"
+    type: "ContentTypeDto"
+    description: "Created content type definition with name, displayName, parts, and fields"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentModeling.Manage"
+      - "ContentModeling.Create"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+  data_model:
+    content_type: "ContentTypeDefinition"
+    parts:
+      - "TitlePart"
+      - "CommonPart"
+    fields: []
+  api:
+    endpoint: "POST /api/v1/content-types"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "Content type created successfully"
+      - 400: "Validation error (invalid name format, missing required fields)"
+      - 403: "User lacks ContentModeling.Create permission"
+      - 409: "Content type name already exists in this tenant"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Create content type with valid definition"
+    given: "User has TenantAdmin role and no content type named 'DestekProgrami' exists"
+    when: "User submits POST /api/v1/content-types with name='DestekProgrami', displayName='Destek Programi'"
+    then: "System returns 201 with ContentTypeDto containing the created type definition"
+
+  - id: "AT-002"
+    scenario: "Reject duplicate content type name"
+    given: "Content type 'DestekProgrami' already exists in this tenant"
+    when: "User submits POST /api/v1/content-types with name='DestekProgrami'"
+    then: "System returns 409 Conflict with ProblemDetails explaining name is taken"
+
+  - id: "AT-003"
+    scenario: "Reject content type creation without permission"
+    given: "User has Editor role (no ContentModeling.Create permission)"
+    when: "User submits POST /api/v1/content-types"
+    then: "System returns 403 Forbidden"
+
+  - id: "AT-004"
+    scenario: "Create content type with parts and fields"
+    given: "User has TenantAdmin role"
+    when: "User submits content type with parts=['TitlePart', 'BodyPart'] and fields=[{name: 'Butce', type: 'NumericField'}]"
+    then: "System creates content type with specified parts and fields, returns 201"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Content type name with Turkish characters"
+    input: "name = 'DestekProgrami' (no Turkish special chars allowed in technical name)"
+    expected: "Validation succeeds. displayName = 'Destek Programi' can contain Turkish characters"
+
+  - id: "EC-002"
+    scenario: "Content type name with invalid characters"
+    input: "name = 'Destek-Programi' (contains hyphen)"
+    expected: "API returns 400 — name must match ^[A-Za-z][A-Za-z0-9]*$"
+
+  - id: "EC-003"
+    scenario: "Content type with maximum field count"
+    input: "Content type with 50 fields of various types"
+    expected: "Content type created successfully, all fields persisted and retrievable"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-101"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.AdminPanel"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands:
+    - "CreateContentTypeCommand"
+    - "CreateContentTypeCommandHandler"
+  mediatr_queries:
+    - "GetContentTypeQuery"
+    - "GetContentTypeQueryHandler"
+  audit_events:
+    - "ContentTypeCreated"
+  localization_keys:
+    - "ContentModeling.ContentType.Created.Success"
+    - "ContentModeling.ContentType.Validation.NameRequired"
+    - "ContentModeling.ContentType.Validation.NameInvalid"
+    - "ContentModeling.ContentType.Validation.NameDuplicate"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "contenttype:{tenantId}:{typeName}"
+    ttl: "30m"

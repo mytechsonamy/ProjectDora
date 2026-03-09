@@ -1,0 +1,181 @@
+# US-902: Audit Log Listing and Filtering in Admin Panel
+# Spec: 4.1.9.1 — View and filter audit log entries from admin panel
+
+story_id: "US-902"
+title: "List, search, and filter audit log entries from the admin panel"
+module: "ProjectDora.Modules.AuditTrail"
+spec_refs:
+  - "4.1.9.1"
+sprint: "S08"
+priority: "P1"
+
+role: "As a Denetci (Auditor)"
+action: "I want to view, search, and filter the audit log by date range, user, event type, and content item"
+benefit: "So that I can investigate specific changes, track user activity, and produce compliance reports"
+
+inputs:
+  - name: "fromDate"
+    type: "DateTime"
+    required: false
+    validation: "LessThanOrEqualTo(toDate) when provided"
+    example: "2026-03-01T00:00:00Z"
+  - name: "toDate"
+    type: "DateTime"
+    required: false
+    validation: "GreaterThanOrEqualTo(fromDate) when provided"
+    example: "2026-03-31T23:59:59Z"
+  - name: "userName"
+    type: "string"
+    required: false
+    validation: "MaxLength(256)"
+    example: "ahmet.yilmaz@kosgeb.gov.tr"
+  - name: "eventType"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "ContentPublished"
+  - name: "contentType"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "Duyuru"
+  - name: "contentItemId"
+    type: "string"
+    required: false
+    validation: "MaxLength(26)"
+    example: "4n3a5h8e2k1t9v6y7p0w"
+  - name: "severity"
+    type: "string"
+    required: false
+    validation: "Must(BeOneOf('Info', 'Warning', 'Critical')) when provided"
+    example: "Warning"
+  - name: "pageSize"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 100)"
+    example: 25
+  - name: "page"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 10000)"
+    example: 1
+  - name: "sortBy"
+    type: "string"
+    required: false
+    validation: "Must(BeOneOf('createdUtc', 'userName', 'eventType')) when provided"
+    example: "createdUtc"
+  - name: "sortDirection"
+    type: "string"
+    required: false
+    validation: "Must(BeOneOf('asc', 'desc')) when provided"
+    example: "desc"
+
+outputs:
+  - name: "items"
+    type: "PagedResult<AuditEventDto>"
+    description: "Paginated list of audit event records matching the filter criteria"
+  - name: "totalCount"
+    type: "int"
+    description: "Total number of matching records across all pages"
+  - name: "hasMore"
+    type: "bool"
+    description: "Whether additional pages of results exist"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "AuditTrail.View"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "AuditEvent"
+    parts: []
+    fields:
+      - "auditEventId"
+      - "eventType"
+      - "severity"
+      - "contentItemId"
+      - "contentType"
+      - "userName"
+      - "userIpAddress"
+      - "summary"
+      - "createdUtc"
+  api:
+    endpoint: "GET /api/v1/audit"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Audit events returned successfully"
+      - 400: "Invalid filter parameters (e.g., fromDate after toDate)"
+      - 403: "User lacks AuditTrail.View permission"
+
+acceptance_tests:
+  - id: "AT-902-001"
+    scenario: "List audit events with pagination"
+    given: "150 audit events exist in the tenant, user has Denetci role"
+    when: "User requests audit log with page=1, pageSize=25"
+    then: "25 events returned ordered by createdUtc descending; totalCount=150; hasMore=true"
+  - id: "AT-902-002"
+    scenario: "Filter audit events by date range"
+    given: "Audit events exist across March 2026"
+    when: "User filters with fromDate=2026-03-10 and toDate=2026-03-15"
+    then: "Only events within that date range are returned; events before or after are excluded"
+  - id: "AT-902-003"
+    scenario: "Filter by event type returns only matching events"
+    given: "Mix of ContentPublished, ContentUpdated, and UserLoggedIn events exist"
+    when: "User filters by eventType=ContentPublished"
+    then: "Only ContentPublished events returned; other event types excluded"
+  - id: "AT-902-004"
+    scenario: "Filter by username narrows results to specific user's actions"
+    given: "Multiple users have performed actions; events from ahmet.yilmaz and zeynep.kaya exist"
+    when: "User filters by userName=ahmet.yilmaz"
+    then: "Only events where userName=ahmet.yilmaz are returned"
+  - id: "AT-902-005"
+    scenario: "Tenant isolation: user cannot see other tenant's audit records"
+    given: "TenantAdmin of Tenant A is authenticated; Tenant B has audit events"
+    when: "TenantAdmin of Tenant A requests audit log without tenant filter"
+    then: "Only Tenant A's audit events are returned; Tenant B events are never exposed"
+
+edge_cases:
+  - id: "EC-902-001"
+    scenario: "All filters applied simultaneously returns narrowed result set"
+    input: "fromDate=2026-03-01, toDate=2026-03-31, userName=ahmet.yilmaz, eventType=ContentPublished, contentType=Duyuru"
+    expected: "Only events matching ALL criteria simultaneously are returned; correctly applies AND logic between all filters"
+  - id: "EC-902-002"
+    scenario: "Filter yields zero matching results"
+    input: "userName=nonexistent.user@kosgeb.gov.tr"
+    expected: "API returns 200 with empty items list, totalCount=0, hasMore=false — no error"
+  - id: "EC-902-003"
+    scenario: "fromDate equal to toDate returns events from that single day"
+    input: "fromDate=2026-03-15T00:00:00Z, toDate=2026-03-15T23:59:59Z"
+    expected: "Events from 2026-03-15 (full day) are returned; events from other days excluded"
+
+dependencies:
+  stories: ["US-901", "US-907"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.AuditTrail"
+  external: []
+
+tech_notes:
+  abstraction_interface: "IAuditService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "ListAuditEventsQuery"
+    - "ListAuditEventsQueryHandler"
+    - "GetAuditEventByIdQuery"
+    - "GetAuditEventByIdQueryHandler"
+  audit_events:
+    - "AuditLogViewed"
+  localization_keys:
+    - "Audit.List.NoResults"
+    - "Audit.Filter.InvalidDateRange"
+    - "Audit.Filter.InvalidEventType"
+    - "Audit.Filter.InvalidSeverity"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

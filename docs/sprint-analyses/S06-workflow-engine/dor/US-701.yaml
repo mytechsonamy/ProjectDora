@@ -1,0 +1,170 @@
+# US-701: Workflow Definition CRUD
+# Spec: 4.1.7.1 - Sunulacak urun uzerinde cesitli is akislari tasarlanabilmesi
+#       amaciyla kullanilabilecek bir is akisi yonetim aracinin bulunmasi
+
+story_id: "US-701"
+title: "Workflow definition CRUD operations"
+module: "ProjectDora.Modules.Workflows"
+spec_refs:
+  - "4.1.7.1"
+sprint: "S06"
+priority: "P0"
+
+role: "As a WorkflowAdmin"
+action: "I want to create, read, update, and delete workflow definitions"
+benefit: "So that I can design automation workflows for content and business processes"
+
+inputs:
+  - name: "name"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(200), Matches('^[A-Za-z][A-Za-z0-9_]*$')"
+    example: "IcerikOnayAkisi"
+  - name: "displayName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(500)"
+    example: "Icerik Onay Is Akisi"
+  - name: "isEnabled"
+    type: "bool"
+    required: false
+    validation: ""
+    example: true
+  - name: "startActivity"
+    type: "object"
+    required: true
+    validation: "NotNull"
+    example: '{"activityId": "trigger-1", "name": "ContentPublishedEvent", "properties": {"ContentTypes": ["Duyuru"]}}'
+  - name: "activities"
+    type: "List<WorkflowActivityDto>"
+    required: true
+    validation: "NotEmpty, MinLength(1)"
+    example: '[{"activityId": "trigger-1", "name": "ContentPublishedEvent", "x": 100, "y": 100}]'
+  - name: "transitions"
+    type: "List<WorkflowTransitionDto>"
+    required: false
+    validation: ""
+    example: '[{"sourceActivityId": "trigger-1", "sourceOutcomeName": "Done", "destinationActivityId": "notify-1"}]'
+
+outputs:
+  - name: "workflowId"
+    type: "string"
+    description: "Unique identifier of the workflow definition"
+  - name: "name"
+    type: "string"
+    description: "Technical name of the workflow"
+  - name: "displayName"
+    type: "string"
+    description: "Human-readable display name"
+  - name: "isEnabled"
+    type: "bool"
+    description: "Whether workflow is active and can be triggered"
+  - name: "activities"
+    type: "List<WorkflowActivityDto>"
+    description: "Activity nodes in the workflow"
+  - name: "transitions"
+    type: "List<WorkflowTransitionDto>"
+    description: "Connections between activities"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Workflow.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+      - "Analyst"
+      - "Denetci"
+      - "SEOUzmani"
+  data_model:
+    content_type: "WorkflowDef"
+    parts:
+      - "WorkflowDefPart"
+      - "AuditTrailPart"
+    fields: []
+  api:
+    endpoint: "POST /api/v1/workflows"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "Workflow definition created"
+      - 400: "Validation error (missing name, invalid activities)"
+      - 403: "User lacks Workflow.Manage permission"
+      - 409: "Workflow with same name already exists in tenant"
+
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Create workflow definition with valid data"
+    given: "User has WorkflowAdmin role and Workflow.Manage permission"
+    when: "User submits a valid workflow definition with name 'IcerikOnayAkisi', a ContentPublishedEvent trigger, and a NotifyContentOwnerTask activity"
+    then: "Workflow definition is created, workflowId returned, isEnabled=true by default"
+  - id: "AT-002"
+    scenario: "List all workflow definitions"
+    given: "User has Workflow.View permission and 3 workflow definitions exist in tenant"
+    when: "User requests GET /api/v1/workflows"
+    then: "All 3 workflow definitions returned with their activities and transitions"
+  - id: "AT-003"
+    scenario: "Update workflow definition"
+    given: "User has Workflow.Manage permission and workflow 'IcerikOnayAkisi' exists"
+    when: "User submits PUT with updated displayName 'Guncellenmis Icerik Onay Akisi'"
+    then: "Workflow definition updated, audit event emitted"
+  - id: "AT-004"
+    scenario: "Delete workflow definition"
+    given: "User has Workflow.Manage permission and workflow exists with no running executions"
+    when: "User sends DELETE /api/v1/workflows/{workflowId}"
+    then: "Workflow definition deleted, returns 204, audit event emitted"
+  - id: "AT-005"
+    scenario: "Reject creation without permission"
+    given: "User has Editor role (no Workflow.Manage permission)"
+    when: "User attempts to create a workflow definition"
+    then: "API returns 403 Forbidden"
+
+edge_cases:
+  - id: "EC-001"
+    scenario: "Turkish characters in workflow displayName"
+    input: "displayName = 'Sirnak Ilcesi KOBi Destek Basvuru Onay Is Akisi'"
+    expected: "Workflow created successfully, Turkish characters preserved in storage and retrieval"
+  - id: "EC-002"
+    scenario: "Duplicate workflow name in same tenant"
+    input: "name = 'IcerikOnayAkisi' (already exists in tenant)"
+    expected: "API returns 409 Conflict with descriptive error message"
+  - id: "EC-003"
+    scenario: "Delete workflow with running executions"
+    input: "DELETE on workflow that has active Running executions"
+    expected: "API returns 409 Conflict -- must wait for executions to complete or cancel them first"
+
+dependencies:
+  stories: ["US-101", "US-102"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Workflows"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IWorkflowService"
+  mediatr_commands:
+    - "CreateWorkflowCommand"
+    - "CreateWorkflowCommandHandler"
+    - "UpdateWorkflowCommand"
+    - "UpdateWorkflowCommandHandler"
+    - "DeleteWorkflowCommand"
+    - "DeleteWorkflowCommandHandler"
+  mediatr_queries:
+    - "GetWorkflowQuery"
+    - "GetWorkflowQueryHandler"
+    - "ListWorkflowsQuery"
+    - "ListWorkflowsQueryHandler"
+  audit_events:
+    - "WorkflowCreated"
+    - "WorkflowUpdated"
+    - "WorkflowDeleted"
+  localization_keys:
+    - "Workflow.Created.Success"
+    - "Workflow.Updated.Success"
+    - "Workflow.Deleted.Success"
+    - "Workflow.Validation.NameRequired"
+    - "Workflow.Validation.NameDuplicate"
+    - "Workflow.Validation.StartActivityRequired"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "workflow:def:{tenantId}:{workflowId}"
+    ttl: "10m"

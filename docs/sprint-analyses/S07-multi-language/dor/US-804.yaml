@@ -1,0 +1,143 @@
+# US-804: Localized URL Routing with Culture-Prefixed Paths
+# Spec: 4.1.3.8 — Content URLs must be different per language (localized slugs)
+
+story_id: "US-804"
+title: "Culture-prefixed URL routing with per-language slugs for content items"
+module: "ProjectDora.Modules.Localization"
+spec_refs:
+  - "4.1.3.8"
+sprint: "S07"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want content items to have distinct, culture-prefixed URLs per language (e.g., /tr/destek-programlari/kobi-destek-2026 and /en/support-programs/sme-support-2026)"
+benefit: "So that each language variant is individually crawlable by search engines, Turkish URLs use Turkish slugs, and visitors always receive content in the expected language without ambiguity"
+
+inputs:
+  - name: "contentItemId"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(26)"
+    example: "4q5t8j2k9f3m1p0n7w6x5y8z"
+  - name: "culture"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MustBeActivatedCulture"
+    example: "tr"
+  - name: "slug"
+    type: "string"
+    required: false
+    validation: "MaxLength(1000), Matches('^[a-z0-9\\-\\/]+$') after transliteration"
+    example: "kobi-destek-2026"
+  - name: "autoGenerateSlug"
+    type: "bool"
+    required: false
+    validation: ""
+    example: true
+
+outputs:
+  - name: "absoluteUrl"
+    type: "string"
+    description: "Full culture-prefixed URL for the content item variant"
+  - name: "slug"
+    type: "string"
+    description: "The slug portion of the URL after transliteration"
+  - name: "culture"
+    type: "string"
+    description: "The culture this URL belongs to"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Localization.EditTranslation"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "All content types with AutoroutePart"
+    parts:
+      - "AutoroutePart (Path, Pattern per culture)"
+      - "LocalizationPart (Culture)"
+    fields:
+      - "Path (string, e.g. 'tr/destek-programlari/kobi-destek-2026')"
+      - "Culture (string)"
+  api:
+    endpoint: "PUT /api/v1/content/{contentType}/{contentItemId}/translations/{culture}/slug"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Slug updated successfully"
+      - 400: "Invalid slug format"
+      - 403: "User lacks Localization.EditTranslation permission"
+      - 404: "Content item or translation not found"
+      - 409: "Slug already in use by another content item in the same culture"
+
+acceptance_tests:
+  - id: "AT-804-001"
+    scenario: "Turkish content item auto-generates Turkish-transliterated slug"
+    given: "DestekProgrami item with displayText 'KOBİ Destek Programı 2026' is created with culture='tr'"
+    when: "System auto-generates slug with autoGenerateSlug=true"
+    then: "URL becomes '/tr/destek-programlari/kobi-destek-programi-2026' — Turkish characters transliterated: İ->i, ı->i, ş->s, ç->c, ö->o, ü->u, ğ->g"
+  - id: "AT-804-002"
+    scenario: "English translation gets independent English slug"
+    given: "Turkish DestekProgrami has URL '/tr/destek-programlari/kobi-destek-2026'; English variant created"
+    when: "Editor sets English slug to 'sme-support-2026'"
+    then: "English URL becomes '/en/support-programs/sme-support-2026' — independent from Turkish slug"
+  - id: "AT-804-003"
+    scenario: "Default culture prefix is optional"
+    given: "Turkish ('tr') is the default culture; Localization:CulturePrefix:OmitDefault = true"
+    when: "Visitor requests '/destek-programlari/kobi-destek-2026' (no 'tr/' prefix)"
+    then: "System serves the Turkish DestekProgrami — route '/destek-programlari/kobi-destek-2026' is equivalent to '/tr/destek-programlari/kobi-destek-2026'"
+  - id: "AT-804-004"
+    scenario: "Localized URL resolves to the correct culture variant"
+    given: "'/en/support-programs/sme-support-2026' is the English DestekProgrami URL"
+    when: "Visitor requests that URL"
+    then: "System serves the English content variant with culture='en' — not the Turkish variant"
+  - id: "AT-804-005"
+    scenario: "Duplicate slug within the same culture is rejected"
+    given: "Another DestekProgrami already has URL '/tr/destek-programlari/kobi-destek-2026'"
+    when: "Editor tries to set the same slug for a different content item"
+    then: "API returns 409 Conflict — 'Bu URL adresi zaten kullaniliyor: /tr/destek-programlari/kobi-destek-2026'"
+
+edge_cases:
+  - id: "EC-804-001"
+    scenario: "Turkish special character transliteration edge cases"
+    input: "displayText = 'ÇEVRE Üretim Şirketi & Öğretim İşletmesi'"
+    expected: "Slug generated: 'cevre-uretim-sirketi-ogretim-isletmesi' — all Turkish special characters correctly transliterated, ampersand stripped, spaces to hyphens"
+  - id: "EC-804-002"
+    scenario: "Culture-prefixed URL for a non-content page route"
+    input: "Visitor navigates to '/en/admin' (admin panel with English prefix)"
+    expected: "Admin panel serves in English culture context; admin routes ignore the culture prefix for access control but respect it for UI language"
+  - id: "EC-804-003"
+    scenario: "Accessing a Turkish URL with English cookie set"
+    input: "Cookie: .AspNetCore.Culture = 'c=en|uic=en'; URL: '/tr/destek-programlari/kobi-destek-2026'"
+    expected: "System serves Turkish content (URL culture prefix takes precedence over cookie); CulturePicker reflects 'tr' as active"
+
+dependencies:
+  stories: ["US-801", "US-802", "US-303"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Localization", "ProjectDora.Modules.ContentManagement"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "ILocalizationService"
+  mediatr_commands:
+    - "SetLocalizedSlugCommand"
+    - "SetLocalizedSlugCommandHandler"
+  mediatr_queries:
+    - "GetLocalizedUrlQuery"
+    - "GetLocalizedUrlQueryHandler"
+    - "ResolveContentByUrlQuery"
+    - "ResolveContentByUrlQueryHandler"
+  audit_events:
+    - "LocalizedSlugUpdated"
+  localization_keys:
+    - "Slug.Generated.Success"
+    - "Slug.Updated.Success"
+    - "Slug.Validation.Duplicate"
+    - "Slug.Validation.InvalidCharacters"
+    - "Slug.Transliteration.Applied"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "localization:url:{tenantId}:{culture}:{slug}"
+    ttl: "30m"

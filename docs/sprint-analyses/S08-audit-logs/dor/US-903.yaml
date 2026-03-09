@@ -1,0 +1,145 @@
+# US-903: Content Type Scoping for Audit Trail
+# Spec: 4.1.9.3 — Filter audit records by content type; configure which content types are audited
+
+story_id: "US-903"
+title: "Configure which content types are included in the audit trail"
+module: "ProjectDora.Modules.AuditTrail"
+spec_refs:
+  - "4.1.9.3"
+sprint: "S08"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want to configure the audit trail to track only specific content types rather than all content types"
+benefit: "So that I can focus audit records on high-value content (e.g., Duyuru, DestekProgrami) and reduce audit log noise and storage from less critical content types"
+
+inputs:
+  - name: "contentTypeName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100), Must(ExistAsContentType)"
+    example: "Duyuru"
+  - name: "isAuditEnabled"
+    type: "bool"
+    required: true
+    validation: ""
+    example: true
+  - name: "trackedEventTypes"
+    type: "List<string>"
+    required: false
+    validation: "Each item Must(BeValidAuditEventType)"
+    example: "['ContentCreated', 'ContentUpdated', 'ContentPublished', 'ContentDeleted']"
+
+outputs:
+  - name: "contentTypeScopeId"
+    type: "string"
+    description: "Unique identifier of the content type audit scope configuration record"
+  - name: "contentTypeName"
+    type: "string"
+    description: "Name of the content type that was configured"
+  - name: "isAuditEnabled"
+    type: "bool"
+    description: "Whether auditing is now enabled for this content type"
+  - name: "trackedEventTypes"
+    type: "List<string>"
+    description: "The list of event types being tracked for this content type"
+  - name: "updatedUtc"
+    type: "DateTime"
+    description: "Timestamp of when the scope configuration was updated"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "AuditTrail.ManageSettings"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "AuditContentTypeScope"
+    parts: []
+    fields:
+      - "contentTypeScopeId"
+      - "tenantId"
+      - "contentTypeName"
+      - "isAuditEnabled"
+      - "trackedEventTypes"
+      - "createdUtc"
+      - "updatedUtc"
+  api:
+    endpoint: "PUT /api/v1/audit/settings/content-types/{contentTypeName}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Content type audit scope updated successfully"
+      - 400: "Validation error — invalid content type name or event type value"
+      - 403: "User lacks AuditTrail.ManageSettings permission"
+      - 404: "Content type does not exist"
+
+acceptance_tests:
+  - id: "AT-903-001"
+    scenario: "Enable auditing for a specific content type"
+    given: "Content type 'Duyuru' exists; audit is currently disabled for it; user has TenantAdmin role"
+    when: "TenantAdmin enables audit for 'Duyuru' with trackedEventTypes=['ContentCreated', 'ContentPublished']"
+    then: "AuditContentTypeScope record is created/updated; subsequent Duyuru ContentCreated and ContentPublished operations generate audit events; ContentUpdated does not generate an event for Duyuru"
+  - id: "AT-903-002"
+    scenario: "Disable auditing for a content type stops event capture"
+    given: "Content type 'Yorum' has auditing enabled; audit events are being captured"
+    when: "TenantAdmin sets isAuditEnabled=false for 'Yorum'"
+    then: "Subsequent operations on 'Yorum' content items do not generate audit events; existing audit events are preserved"
+  - id: "AT-903-003"
+    scenario: "List all content types with their audit scope configuration"
+    given: "Tenant has 5 content types; 3 have custom audit scope settings; 2 use defaults"
+    when: "TenantAdmin requests the audit content type scope list"
+    then: "All 5 content types returned with their current isAuditEnabled and trackedEventTypes values"
+  - id: "AT-903-004"
+    scenario: "Scope change emits a settings audit event"
+    given: "TenantAdmin changes audit scope for 'DestekProgrami'"
+    when: "The scope update is saved"
+    then: "A ContentTypeScopeUpdated audit event is emitted recording the old and new configuration"
+
+edge_cases:
+  - id: "EC-903-001"
+    scenario: "Configure audit scope for a content type that does not exist"
+    input: "contentTypeName = 'NonExistentType'"
+    expected: "API returns 404 — content type must exist before audit scope can be configured"
+  - id: "EC-903-002"
+    scenario: "Set trackedEventTypes to empty list when isAuditEnabled is true"
+    input: "isAuditEnabled=true, trackedEventTypes=[]"
+    expected: "System interprets empty trackedEventTypes as 'track all event types' — all events for this content type are captured"
+  - id: "EC-903-003"
+    scenario: "Turkish content type name is handled correctly"
+    input: "contentTypeName = 'DestekProgramı' (with Turkish dotless-i)"
+    expected: "Content type name stored and matched using invariant string comparison; no encoding errors"
+
+dependencies:
+  stories: ["US-901", "US-902", "US-907"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.AuditTrail"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+tech_notes:
+  abstraction_interface: "IAuditService"
+  mediatr_commands:
+    - "SetContentTypeScopeCommand"
+    - "SetContentTypeScopeCommandHandler"
+  mediatr_queries:
+    - "GetContentTypeScopesQuery"
+    - "GetContentTypeScopesQueryHandler"
+    - "GetContentTypeScopeQuery"
+    - "GetContentTypeScopeQueryHandler"
+  audit_events:
+    - "ContentTypeScopeUpdated"
+  localization_keys:
+    - "Audit.Scope.Updated.Success"
+    - "Audit.Scope.ContentTypeNotFound"
+    - "Audit.Scope.InvalidEventType"
+    - "Audit.Settings.AllEventTypes"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "audit:scope:{tenantId}:{contentTypeName}"
+    ttl: "15m"

@@ -1,0 +1,140 @@
+# US-602: Create and manage roles (unlimited, CRUD)
+story_id: "US-602"
+title: "Create and manage roles with no upper limit"
+module: "ProjectDora.Modules.UserManagement"
+spec_refs:
+  - "4.1.6.1"
+sprint: "S05"
+priority: "P0"
+
+role: "As a TenantAdmin"
+action: "I want to create, read, update, and delete roles with no upper limit"
+benefit: "So that I can define custom access levels tailored to my organization's structure"
+
+inputs:
+  - name: "roleName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100), Matches('^[A-Za-z][A-Za-z0-9_ -]*$')"
+    example: "Destek Programi Yoneticisi"
+  - name: "description"
+    type: "string"
+    required: false
+    validation: "MaxLength(500)"
+    example: "KOSGEB destek programlarini yoneten personel rolu"
+  - name: "permissions"
+    type: "List<string>"
+    required: false
+    validation: "Each permission must be a valid registered permission"
+    example: '["ContentManagement.Create", "ContentManagement.EditOwn", "ContentType.DestekProgrami.Edit"]'
+
+outputs:
+  - name: "roleId"
+    type: "string"
+    description: "Unique identifier of the created role"
+  - name: "name"
+    type: "string"
+    description: "Role name"
+  - name: "permissions"
+    type: "List<string>"
+    description: "Assigned permission names"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "UserRolePermission.ManageRoles"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "Role"
+    parts: []
+    fields: []
+  api:
+    endpoint: "POST /api/v1/roles"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "Role created successfully"
+      - 400: "Validation error (invalid name, invalid permission)"
+      - 403: "User lacks UserRolePermission.ManageRoles permission"
+      - 409: "Role name already exists in this tenant"
+
+acceptance_tests:
+  - id: "AT-602-01"
+    scenario: "Create role with permissions"
+    given: "TenantAdmin is authenticated and has ManageRoles permission"
+    when: "TenantAdmin submits roleName='Destek Yoneticisi' with permissions ['ContentManagement.Create', 'ContentType.DestekProgrami.Edit']"
+    then: "Role is created, API returns 201, role appears in role list with assigned permissions"
+  - id: "AT-602-02"
+    scenario: "List all roles"
+    given: "5 custom roles and 3 default roles exist in tenant"
+    when: "TenantAdmin requests GET /api/v1/roles"
+    then: "API returns all 8 roles with their permissions"
+  - id: "AT-602-03"
+    scenario: "Update role permissions"
+    given: "Role 'Destek Yoneticisi' exists with 2 permissions"
+    when: "TenantAdmin sends PUT /api/v1/roles/{roleId} adding ContentManagement.Publish"
+    then: "Role is updated with 3 permissions, audit event 'RoleUpdated' emitted"
+  - id: "AT-602-04"
+    scenario: "Delete role cascades user assignments"
+    given: "Role 'Eski Rol' is assigned to 3 users"
+    when: "TenantAdmin deletes role 'Eski Rol'"
+    then: "Role is deleted, removed from all 3 users, audit event 'RoleDeleted' emitted"
+  - id: "AT-602-05"
+    scenario: "Reject duplicate role name"
+    given: "Role 'Editor' already exists in tenant"
+    when: "TenantAdmin attempts to create another role named 'Editor'"
+    then: "API returns 409 Conflict"
+
+edge_cases:
+  - id: "EC-602-01"
+    scenario: "Role name with Turkish characters"
+    input: "roleName = 'Icerik Duzenleyicisi'"
+    expected: "Role created successfully, Turkish characters preserved (I without dot, c with cedilla, u with diaeresis)"
+  - id: "EC-602-02"
+    scenario: "Assign non-existent permission to role"
+    input: "permissions = ['NonExistent.Permission.XYZ']"
+    expected: "API returns 400 — permission 'NonExistent.Permission.XYZ' is not registered"
+  - id: "EC-602-03"
+    scenario: "Delete built-in SuperAdmin role"
+    input: "DELETE /api/v1/roles/{superAdminRoleId}"
+    expected: "API returns 400 — built-in roles cannot be deleted"
+
+dependencies:
+  stories: ["US-101", "US-601"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.AdminPanel"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IRoleService"
+  mediatr_commands:
+    - "CreateRoleCommand"
+    - "CreateRoleCommandHandler"
+    - "UpdateRoleCommand"
+    - "UpdateRoleCommandHandler"
+    - "DeleteRoleCommand"
+    - "DeleteRoleCommandHandler"
+  mediatr_queries:
+    - "GetRoleQuery"
+    - "GetRoleQueryHandler"
+    - "ListRolesQuery"
+    - "ListRolesQueryHandler"
+  audit_events:
+    - "RoleCreated"
+    - "RoleUpdated"
+    - "RoleDeleted"
+  localization_keys:
+    - "Role.Created.Success"
+    - "Role.Updated.Success"
+    - "Role.Deleted.Success"
+    - "Role.Validation.NameRequired"
+    - "Role.Validation.NameDuplicate"
+    - "Role.Validation.CannotDeleteBuiltIn"
+    - "Role.Validation.InvalidPermission"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "role:{tenantId}:{roleId}"
+    ttl: "10m"

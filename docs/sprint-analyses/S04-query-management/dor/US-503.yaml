@@ -1,0 +1,133 @@
+# US-503: Query Test Execution from Admin Panel
+# Spec: 4.1.5.2, 4.1.5.5 — Test execution of queries from admin panel
+
+story_id: "US-503"
+title: "Test-execute saved queries from admin panel with live results"
+module: "ProjectDora.Modules.QueryEngine"
+spec_refs:
+  - "4.1.5.2"
+  - "4.1.5.5"
+sprint: "S04"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want to test-execute saved queries directly from the admin panel and see live results"
+benefit: "So that I can verify query correctness before exposing them to analysts or API consumers"
+
+inputs:
+  - name: "queryId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "q-001-destek-arama"
+  - name: "parameters"
+    type: "Dictionary<string, object>"
+    required: false
+    validation: ""
+    example: "{ 'anahtar_kelime': 'teknoloji desteği', 'durum': 'Published' }"
+  - name: "maxResults"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 100)"
+    example: 10
+
+outputs:
+  - name: "columns"
+    type: "List<string>"
+    description: "Column names in the result set"
+  - name: "rows"
+    type: "List<Dictionary<string, object>>"
+    description: "Result rows as key-value pairs"
+  - name: "totalCount"
+    type: "int"
+    description: "Total matching results"
+  - name: "executionTimeMs"
+    type: "int"
+    description: "Query execution time in milliseconds"
+  - name: "queryType"
+    type: "string"
+    description: "Type of query executed (Lucene, Elasticsearch, SQL)"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "QueryEngine.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "SavedQuery"
+    parts: []
+    fields: []
+  api:
+    endpoint: "POST /api/v1/queries/{queryId}/execute"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Query executed successfully, results returned"
+      - 400: "Invalid parameters or query syntax error"
+      - 403: "User lacks QueryEngine.Manage permission"
+      - 404: "SavedQuery not found"
+      - 408: "Query execution timeout (30 seconds)"
+
+acceptance_tests:
+  - id: "AT-503-001"
+    scenario: "Test-execute Lucene query with results"
+    given: "SavedQuery 'destek_arama' of type Lucene exists, content items with 'destek' in displayText exist"
+    when: "Admin clicks test-execute on the query"
+    then: "Results are displayed with contentItemId, displayText, relevance score, and execution time"
+  - id: "AT-503-002"
+    scenario: "Test-execute SQL query with parameters"
+    given: "SavedQuery 'program_rapor' of type SQL with parameter @durum exists"
+    when: "Admin provides parameter durum='aktif' and clicks test-execute"
+    then: "SQL query runs with parameter substitution, results display as table with column headers"
+  - id: "AT-503-003"
+    scenario: "Test-execute returns empty results gracefully"
+    given: "SavedQuery 'bos_sorgu' exists but no matching data"
+    when: "Admin test-executes the query"
+    then: "Empty result set displayed with totalCount=0, no error"
+  - id: "AT-503-004"
+    scenario: "Query syntax error shows user-friendly message"
+    given: "SavedQuery with malformed Lucene syntax: 'AND OR destek ((' "
+    when: "Admin test-executes the query"
+    then: "API returns 400 with a user-friendly Turkish error message about invalid syntax"
+
+edge_cases:
+  - id: "EC-503-001"
+    scenario: "Query execution exceeds timeout"
+    input: "Complex SQL query that takes > 30 seconds on large dataset"
+    expected: "API returns 408 Request Timeout after 30 seconds, partial results NOT returned"
+  - id: "EC-503-002"
+    scenario: "SQL query with missing required parameter"
+    input: "Query has @tarih parameter marked required, but not provided"
+    expected: "API returns 400 with message identifying the missing parameter name"
+  - id: "EC-503-003"
+    scenario: "Test-execute with Turkish parameter values"
+    input: "parameters = { 'sehir': 'Şırnak', 'kategori': 'Küçük Ölçekli' }"
+    expected: "Parameters passed correctly, Turkish characters preserved in query execution"
+
+dependencies:
+  stories: ["US-502"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.QueryEngine"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IQueryService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "ExecuteSavedQuery"
+    - "ExecuteSavedQueryHandler"
+  audit_events:
+    - "QueryExecuted"
+  localization_keys:
+    - "Query.Executed.Success"
+    - "Query.Executed.EmptyResults"
+    - "Query.Executed.Timeout"
+    - "Query.Executed.SyntaxError"
+    - "Query.Validation.MissingParameter"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

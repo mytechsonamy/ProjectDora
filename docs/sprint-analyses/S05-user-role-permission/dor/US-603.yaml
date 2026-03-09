@@ -1,0 +1,116 @@
+# US-603: Assign and revoke roles to/from users
+story_id: "US-603"
+title: "Assign and revoke roles to/from users"
+module: "ProjectDora.Modules.UserManagement"
+spec_refs:
+  - "4.1.6.1"
+sprint: "S05"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want to assign or revoke one or more roles to/from a user"
+benefit: "So that I can control what each user can access based on their job function"
+
+inputs:
+  - name: "userId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "user-mehmet-001"
+  - name: "roleNames"
+    type: "List<string>"
+    required: true
+    validation: "NotEmpty, each role must exist in tenant"
+    example: '["Editor", "Analyst"]'
+
+outputs:
+  - name: "userId"
+    type: "string"
+    description: "User ID whose roles were updated"
+  - name: "roles"
+    type: "List<string>"
+    description: "Updated list of assigned role names"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "UserRolePermission.AssignRoles"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "UserRole"
+    parts: []
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/users/{userId}/roles"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Roles assigned successfully"
+      - 400: "Validation error (role does not exist)"
+      - 403: "User lacks UserRolePermission.AssignRoles permission"
+      - 404: "User not found"
+
+acceptance_tests:
+  - id: "AT-603-01"
+    scenario: "Assign multiple roles to user"
+    given: "User 'mehmet-001' exists with no roles, roles 'Editor' and 'Analyst' exist"
+    when: "TenantAdmin sends PUT /api/v1/users/mehmet-001/roles with roleNames=['Editor', 'Analyst']"
+    then: "User now has both Editor and Analyst roles, audit event 'RoleAssigned' emitted for each"
+  - id: "AT-603-02"
+    scenario: "Replace existing roles"
+    given: "User 'mehmet-001' has roles ['Editor', 'Analyst']"
+    when: "TenantAdmin sends PUT /api/v1/users/mehmet-001/roles with roleNames=['Author']"
+    then: "User now has only Author role, Editor and Analyst removed"
+  - id: "AT-603-03"
+    scenario: "Assign non-existent role"
+    given: "Role 'NonExistentRole' does not exist in tenant"
+    when: "TenantAdmin sends PUT with roleNames=['NonExistentRole']"
+    then: "API returns 400 with error 'Role NonExistentRole not found'"
+  - id: "AT-603-04"
+    scenario: "User not found"
+    given: "User 'non-existent-user' does not exist"
+    when: "TenantAdmin attempts to assign roles to 'non-existent-user'"
+    then: "API returns 404 Not Found"
+
+edge_cases:
+  - id: "EC-603-01"
+    scenario: "Assign SuperAdmin role by non-SuperAdmin"
+    input: "TenantAdmin attempts to assign 'SuperAdmin' role to a user"
+    expected: "API returns 403 — only SuperAdmin can assign SuperAdmin role (privilege escalation prevention)"
+  - id: "EC-603-02"
+    scenario: "Self-role removal"
+    input: "TenantAdmin removes their own TenantAdmin role"
+    expected: "API returns 400 — cannot remove your own admin role (safety guard)"
+  - id: "EC-603-03"
+    scenario: "Assign roles to disabled user"
+    input: "User is disabled (enabled=false), TenantAdmin assigns roles"
+    expected: "Roles assigned successfully — roles can be configured even for disabled accounts (for pre-provisioning)"
+
+dependencies:
+  stories: ["US-601", "US-602"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.UserManagement"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IRoleService"
+  mediatr_commands:
+    - "AssignRolesCommand"
+    - "AssignRolesCommandHandler"
+  mediatr_queries: []
+  audit_events:
+    - "RoleAssigned"
+    - "RoleRevoked"
+  localization_keys:
+    - "Role.Assigned.Success"
+    - "Role.Revoked.Success"
+    - "Role.Validation.RoleNotFound"
+    - "Role.Validation.CannotAssignSuperAdmin"
+    - "Role.Validation.CannotRemoveOwnAdmin"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "user:{tenantId}:{userId}:roles"
+    ttl: "10m"

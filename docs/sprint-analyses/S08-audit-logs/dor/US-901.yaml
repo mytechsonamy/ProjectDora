@@ -1,0 +1,172 @@
+# US-901: Audit Event Capture
+# Spec: 4.1.9.1 — Audit log for all content changes with timestamp, user, IP, event type
+
+story_id: "US-901"
+title: "Capture and persist audit events for all content operations"
+module: "ProjectDora.Modules.AuditTrail"
+spec_refs:
+  - "4.1.9.1"
+sprint: "S08"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want every content change in the system to be automatically captured as an audit event with timestamp, username, IP address, and event type"
+benefit: "So that I have a complete, immutable record of who changed what and when for compliance and traceability"
+
+inputs:
+  - name: "eventType"
+    type: "string"
+    required: true
+    validation: "NotEmpty, Must(BeOneOf('ContentCreated', 'ContentUpdated', 'ContentPublished', 'ContentUnpublished', 'ContentDeleted', 'ContentRolledBack', 'UserLoggedIn', 'UserLoggedOut', 'RoleAssigned', 'RoleRevoked'))"
+    example: "ContentPublished"
+  - name: "contentItemId"
+    type: "string"
+    required: false
+    validation: "MaxLength(26)"
+    example: "4n3a5h8e2k1t9v6y7p0w"
+  - name: "contentType"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "Duyuru"
+  - name: "userId"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(26)"
+    example: "u-tenant01-admin-001"
+  - name: "userName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(256)"
+    example: "ahmet.yilmaz@kosgeb.gov.tr"
+  - name: "userIpAddress"
+    type: "string"
+    required: true
+    validation: "NotEmpty, Must(BeValidIpAddress)"
+    example: "192.168.1.45"
+  - name: "summary"
+    type: "string"
+    required: false
+    validation: "MaxLength(500)"
+    example: "Duyuru içeriği güncellendi: 'KOBİ Destek Programı 2026'"
+  - name: "metadata"
+    type: "Dictionary<string, object>"
+    required: false
+    validation: ""
+    example: "{ 'versionNumber': 3, 'contentTypeDisplayName': 'Duyuru' }"
+
+outputs:
+  - name: "auditEventId"
+    type: "string"
+    description: "Unique identifier of the created audit event record"
+  - name: "createdUtc"
+    type: "DateTime"
+    description: "UTC timestamp when the audit event was recorded"
+  - name: "isAsync"
+    type: "bool"
+    description: "Whether the event was queued for async persistence (true) or written synchronously (false)"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Authenticated"
+    denied_roles:
+      - "Anonymous"
+  data_model:
+    content_type: "AuditEvent"
+    parts: []
+    fields:
+      - "auditEventId"
+      - "tenantId"
+      - "eventType"
+      - "severity"
+      - "contentItemId"
+      - "contentType"
+      - "userId"
+      - "userName"
+      - "userIpAddress"
+      - "summary"
+      - "metadata"
+      - "createdUtc"
+  api:
+    endpoint: "POST /api/v1/audit/events (internal — called by other modules, not public)"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "Audit event queued or persisted successfully"
+      - 400: "Validation error — missing required fields"
+      - 503: "Audit channel full and sync write failed"
+
+acceptance_tests:
+  - id: "AT-901-001"
+    scenario: "Content publish generates audit event with full metadata"
+    given: "A content item of type 'Duyuru' exists, user ahmet.yilmaz is authenticated with IP 10.0.0.5"
+    when: "User publishes the content item"
+    then: "An AuditEvent record is created with eventType=ContentPublished, userName=ahmet.yilmaz, userIpAddress=10.0.0.5, contentType=Duyuru, and a non-null createdUtc"
+  - id: "AT-901-002"
+    scenario: "Async write does not block the publishing operation"
+    given: "Audit async write pipeline is active (AuditTrail:AsyncWrite=true)"
+    when: "User publishes a content item"
+    then: "The publish operation completes in < 50ms additional latency; audit event appears in the audit log within 5 seconds"
+  - id: "AT-901-003"
+    scenario: "All specified event types are captured correctly"
+    given: "System is configured with audit enabled for all event types"
+    when: "The following operations are performed in sequence: create, update, publish, delete content; user login, logout; role assignment"
+    then: "A distinct audit event is created for each operation with the correct eventType value"
+  - id: "AT-901-004"
+    scenario: "Audit event includes tenant isolation field"
+    given: "Two tenants T1 and T2 both perform content operations"
+    when: "Audit events are written for both tenants"
+    then: "Each AuditEvent record contains the correct tenantId; T1 events have T1's tenantId and T2 events have T2's tenantId"
+
+edge_cases:
+  - id: "EC-901-001"
+    scenario: "Audit channel at capacity triggers synchronous fallback"
+    input: "10,001 concurrent audit events arrive when channel capacity is 10,000"
+    expected: "The 10,001st event is written synchronously; a warning is logged via Serilog indicating channel overflow; no events are lost"
+  - id: "EC-901-002"
+    scenario: "Audit event for deleted content item with no content type scope"
+    input: "Content item is deleted but its content type has been removed from the audit scope mid-operation"
+    expected: "Audit event is still created with the last known contentType value; operation does not throw an exception"
+  - id: "EC-901-003"
+    scenario: "IP address is an IPv6 address"
+    input: "userIpAddress = '2001:db8::1'"
+    expected: "IPv6 address is stored correctly without truncation or error"
+
+dependencies:
+  stories: ["US-301", "US-302", "US-601", "US-907"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.AuditTrail"
+  external:
+    - "Audit.NET (NuGet: Audit.NET)"
+    - "OrchardCore.AuditTrail"
+
+tech_notes:
+  abstraction_interface: "IAuditService"
+  mediatr_commands:
+    - "LogAuditEventCommand"
+    - "LogAuditEventCommandHandler"
+  mediatr_queries: []
+  audit_events:
+    - "ContentCreated"
+    - "ContentUpdated"
+    - "ContentPublished"
+    - "ContentUnpublished"
+    - "ContentDeleted"
+    - "ContentRolledBack"
+    - "UserLoggedIn"
+    - "UserLoggedOut"
+    - "RoleAssigned"
+    - "RoleRevoked"
+  localization_keys:
+    - "Audit.Event.ContentCreated"
+    - "Audit.Event.ContentUpdated"
+    - "Audit.Event.ContentPublished"
+    - "Audit.Event.ContentDeleted"
+    - "Audit.Event.UserLoggedIn"
+    - "Audit.Event.UserLoggedOut"
+    - "Audit.Event.RoleAssigned"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

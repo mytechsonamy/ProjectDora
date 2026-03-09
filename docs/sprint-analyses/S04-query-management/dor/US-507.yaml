@@ -1,0 +1,136 @@
+# US-507: Parameterized Query Execution
+# Spec: 4.1.5.5 — Query execution with various parameters and testing
+
+story_id: "US-507"
+title: "Execute saved queries with runtime parameters"
+module: "ProjectDora.Modules.QueryEngine"
+spec_refs:
+  - "4.1.5.5"
+sprint: "S04"
+priority: "P1"
+
+role: "As an Analyst"
+action: "I want to execute saved queries by providing runtime parameters"
+benefit: "So that I can reuse pre-built queries with different filter criteria without writing new queries"
+
+inputs:
+  - name: "queryId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "q-003-kobi-destek-rapor"
+  - name: "parameters"
+    type: "Dictionary<string, object>"
+    required: false
+    validation: "Must(MatchQueryParameterDefinitions)"
+    example: "{ 'il': 'Ankara', 'min_butce': 50000, 'baslangic_tarihi': '2026-01-01' }"
+  - name: "page"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 10000)"
+    example: 1
+  - name: "pageSize"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 100)"
+    example: 20
+
+outputs:
+  - name: "columns"
+    type: "List<string>"
+    description: "Column names in the result set"
+  - name: "rows"
+    type: "List<Dictionary<string, object>>"
+    description: "Result rows"
+  - name: "totalCount"
+    type: "int"
+    description: "Total matching results"
+  - name: "executionTimeMs"
+    type: "int"
+    description: "Query execution time"
+  - name: "appliedParameters"
+    type: "Dictionary<string, object>"
+    description: "Actual parameter values used (with defaults applied)"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "QueryEngine.Execute"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+  data_model:
+    content_type: "SavedQuery"
+    parts: []
+    fields: []
+  api:
+    endpoint: "POST /api/v1/queries/{queryId}/execute"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Query executed with parameters, results returned"
+      - 400: "Missing required parameter or invalid parameter type"
+      - 403: "User lacks QueryEngine.Execute permission or per-query permission"
+      - 404: "SavedQuery not found"
+      - 408: "Query execution timeout"
+
+acceptance_tests:
+  - id: "AT-507-001"
+    scenario: "Execute saved query with all parameters provided"
+    given: "SavedQuery 'kobi_destek_rapor' has parameters: il (string, required), min_butce (int, optional, default=0)"
+    when: "Analyst provides il='Ankara' and min_butce=50000"
+    then: "Query executes with both parameters bound, results filtered accordingly"
+  - id: "AT-507-002"
+    scenario: "Execute with default parameter values"
+    given: "SavedQuery has parameter min_butce with default=0"
+    when: "Analyst omits min_butce, provides only il='İstanbul'"
+    then: "Query executes with min_butce=0 (default), il='İstanbul'"
+  - id: "AT-507-003"
+    scenario: "Missing required parameter returns validation error"
+    given: "SavedQuery has required parameter 'il'"
+    when: "Analyst executes without providing 'il'"
+    then: "API returns 400 with error: 'il' parametresi zorunludur (parameter 'il' is required)"
+  - id: "AT-507-004"
+    scenario: "Per-query permission enforcement"
+    given: "SavedQuery 'ozel_rapor' is API-exposed with permission QueryEngine.Execute.ozel_rapor"
+    when: "Analyst without that specific permission attempts execution"
+    then: "API returns 403 Forbidden"
+
+edge_cases:
+  - id: "EC-507-001"
+    scenario: "Turkish text as parameter value"
+    input: "parameters = { 'il': 'Şırnak', 'program_adi': 'Küçük Ölçekli İşletme Desteği' }"
+    expected: "Parameters correctly bound with Turkish characters, results reflect correct filtering"
+  - id: "EC-507-002"
+    scenario: "Parameter type mismatch"
+    input: "min_butce parameter defined as int, user provides 'abc'"
+    expected: "API returns 400 with error: 'min_butce' must be a numeric value"
+  - id: "EC-507-003"
+    scenario: "Null parameter value for optional parameter"
+    input: "parameters = { 'il': 'Ankara', 'sektor': null }"
+    expected: "Null parameter treated as unset, default value applied or condition excluded"
+
+dependencies:
+  stories: ["US-502", "US-503"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.QueryEngine"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IQueryService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "ExecuteParameterizedQuery"
+    - "ExecuteParameterizedQueryHandler"
+  audit_events:
+    - "QueryExecuted"
+  localization_keys:
+    - "Query.Executed.Success"
+    - "Query.Validation.MissingParameter"
+    - "Query.Validation.InvalidParameterType"
+    - "Query.Validation.ParameterRequired"
+    - "Query.Permission.Denied"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "query:saved:{tenantId}:{queryId}:{paramHash}"
+    ttl: "5m"

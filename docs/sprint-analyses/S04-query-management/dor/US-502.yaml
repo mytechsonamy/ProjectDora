@@ -1,0 +1,167 @@
+# US-502: Saved Query CRUD from Admin Panel
+# Spec: 4.1.5.2 — Admin panel query editor (create, read, update, delete)
+
+story_id: "US-502"
+title: "Create, read, update, and delete saved queries from admin panel"
+module: "ProjectDora.Modules.QueryEngine"
+spec_refs:
+  - "4.1.5.2"
+  - "4.1.5.4"
+sprint: "S04"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want to create, edit, and delete saved queries (Lucene, SQL, Elasticsearch) from the admin panel"
+benefit: "So that I can build reusable queries for analysts and for API exposure"
+
+inputs:
+  - name: "name"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(200), Matches('^[A-Za-z][A-Za-z0-9_-]*$')"
+    example: "destek_programlari_arama"
+  - name: "type"
+    type: "string"
+    required: true
+    validation: "NotEmpty, Must(BeOneOf('Lucene', 'Elasticsearch', 'SQL'))"
+    example: "Lucene"
+  - name: "queryText"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(10000)"
+    example: "displayText:destek AND status:Published"
+  - name: "description"
+    type: "string"
+    required: false
+    validation: "MaxLength(1000)"
+    example: "Destek programları tam metin araması"
+  - name: "parameters"
+    type: "Dictionary<string, QueryParameterDef>"
+    required: false
+    validation: ""
+    example: "{ 'anahtar_kelime': { type: 'string', required: true, default: '' } }"
+  - name: "isApiExposed"
+    type: "bool"
+    required: false
+    validation: ""
+    example: false
+
+outputs:
+  - name: "queryId"
+    type: "string"
+    description: "Unique identifier of the saved query"
+  - name: "name"
+    type: "string"
+    description: "Query name"
+  - name: "type"
+    type: "string"
+    description: "Query type (Lucene, Elasticsearch, SQL)"
+  - name: "createdUtc"
+    type: "DateTime"
+    description: "Creation timestamp"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "QueryEngine.Manage"
+      - "QueryEngine.Create"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "SavedQuery"
+    parts: []
+    fields:
+      - "name"
+      - "type"
+      - "queryText"
+      - "parameters"
+      - "isApiExposed"
+  api:
+    endpoint: "POST /api/v1/queries"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "Query created successfully"
+      - 400: "Validation error (invalid name, empty queryText, invalid type)"
+      - 403: "User lacks QueryEngine.Create permission"
+      - 409: "Query name already exists in this tenant"
+
+acceptance_tests:
+  - id: "AT-502-001"
+    scenario: "Create a Lucene saved query"
+    given: "User has TenantAdmin role"
+    when: "User submits a valid Lucene query with name 'destek_arama' and queryText 'destek programı'"
+    then: "SavedQuery is created, queryId returned, audit event QueryCreated emitted"
+  - id: "AT-502-002"
+    scenario: "Create a SQL saved query"
+    given: "User has TenantAdmin role"
+    when: "User submits a SQL query: SELECT program_adi, butce FROM analytics.destek_programlari WHERE durum = @durum"
+    then: "SavedQuery is created with type=SQL and parameter definition for 'durum'"
+  - id: "AT-502-003"
+    scenario: "Update saved query text"
+    given: "SavedQuery 'destek_arama' exists"
+    when: "User updates queryText to 'destek AND kategori:teknoloji'"
+    then: "Query is updated, old version logged in audit trail"
+  - id: "AT-502-004"
+    scenario: "Delete saved query"
+    given: "SavedQuery 'eski_sorgu' exists"
+    when: "User deletes the query"
+    then: "Query is removed, audit event QueryDeleted emitted"
+  - id: "AT-502-005"
+    scenario: "List all saved queries"
+    given: "3 saved queries exist in the tenant"
+    when: "User requests query list"
+    then: "All 3 queries returned with name, type, and isApiExposed fields"
+
+edge_cases:
+  - id: "EC-502-001"
+    scenario: "Duplicate query name in same tenant"
+    input: "name = 'destek_arama' (already exists)"
+    expected: "API returns 409 Conflict — query name must be unique per tenant"
+  - id: "EC-502-002"
+    scenario: "Turkish characters in query description"
+    input: "description = 'KOBİ'lere yönelik destek programları çapraz sorgulama aracı'"
+    expected: "Description saved correctly, Turkish characters preserved"
+  - id: "EC-502-003"
+    scenario: "Maximum length query text"
+    input: "queryText = 10,000 character complex Lucene query"
+    expected: "Query saved successfully without truncation"
+
+dependencies:
+  stories: ["US-101"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.QueryEngine"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IQueryService"
+  mediatr_commands:
+    - "CreateSavedQueryCommand"
+    - "CreateSavedQueryCommandHandler"
+    - "UpdateSavedQueryCommand"
+    - "UpdateSavedQueryCommandHandler"
+    - "DeleteSavedQueryCommand"
+    - "DeleteSavedQueryCommandHandler"
+  mediatr_queries:
+    - "GetSavedQueryQuery"
+    - "GetSavedQueryQueryHandler"
+    - "ListSavedQueriesQuery"
+    - "ListSavedQueriesQueryHandler"
+  audit_events:
+    - "QueryCreated"
+    - "QueryUpdated"
+    - "QueryDeleted"
+  localization_keys:
+    - "Query.Created.Success"
+    - "Query.Updated.Success"
+    - "Query.Deleted.Success"
+    - "Query.Validation.NameRequired"
+    - "Query.Validation.NameDuplicate"
+    - "Query.Validation.InvalidType"
+    - "Query.Validation.QueryTextRequired"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

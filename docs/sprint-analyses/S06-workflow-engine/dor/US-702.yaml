@@ -1,0 +1,114 @@
+# US-702: Workflow Enable/Disable and Lifecycle Management
+# Spec: 4.1.7.1 - Is akisi yonetim araci
+
+story_id: "US-702"
+title: "Workflow enable/disable and lifecycle management"
+module: "ProjectDora.Modules.Workflows"
+spec_refs:
+  - "4.1.7.1"
+sprint: "S06"
+priority: "P1"
+
+role: "As a WorkflowAdmin"
+action: "I want to enable and disable workflow definitions"
+benefit: "So that I can control which workflows are active without deleting them"
+
+inputs:
+  - name: "workflowId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "wf-icerik-onay-001"
+  - name: "action"
+    type: "string"
+    required: true
+    validation: "NotEmpty, OneOf('enable', 'disable')"
+    example: "enable"
+
+outputs:
+  - name: "workflowId"
+    type: "string"
+    description: "Workflow definition ID"
+  - name: "isEnabled"
+    type: "bool"
+    description: "New enabled state of the workflow"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Workflow.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+  data_model:
+    content_type: "WorkflowDef"
+    parts:
+      - "WorkflowDefPart"
+      - "AuditTrailPart"
+    fields: []
+  api:
+    endpoint: "POST /api/v1/workflows/{workflowId}/enable"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Workflow enabled/disabled successfully"
+      - 403: "User lacks Workflow.Manage permission"
+      - 404: "Workflow definition not found"
+
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Enable a disabled workflow"
+    given: "User has Workflow.Manage permission and workflow 'IcerikOnayAkisi' is disabled"
+    when: "User sends POST /api/v1/workflows/{workflowId}/enable"
+    then: "Workflow isEnabled becomes true, triggers start listening, audit event emitted"
+  - id: "AT-002"
+    scenario: "Disable an enabled workflow"
+    given: "User has Workflow.Manage permission and workflow is enabled"
+    when: "User sends POST /api/v1/workflows/{workflowId}/disable"
+    then: "Workflow isEnabled becomes false, triggers stop listening, running executions continue to completion"
+  - id: "AT-003"
+    scenario: "Disabled workflow does not trigger on events"
+    given: "Workflow 'IcerikOnayAkisi' is disabled with ContentPublishedEvent trigger"
+    when: "A content item of type 'Duyuru' is published"
+    then: "Workflow does NOT trigger, no execution created"
+  - id: "AT-004"
+    scenario: "Enable non-existent workflow"
+    given: "WorkflowId does not exist"
+    when: "User sends POST /api/v1/workflows/{invalidId}/enable"
+    then: "API returns 404 Not Found"
+
+edge_cases:
+  - id: "EC-001"
+    scenario: "Enable an already enabled workflow"
+    input: "POST /enable on workflow where isEnabled=true"
+    expected: "API returns 200 (idempotent), no error, no duplicate audit event"
+  - id: "EC-002"
+    scenario: "Disable workflow with running executions"
+    input: "POST /disable on workflow with 3 active Running executions"
+    expected: "Workflow disabled for new triggers, existing 3 executions continue to completion without interruption"
+
+dependencies:
+  stories: ["US-701"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Workflows"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IWorkflowService"
+  mediatr_commands:
+    - "EnableWorkflowCommand"
+    - "EnableWorkflowCommandHandler"
+    - "DisableWorkflowCommand"
+    - "DisableWorkflowCommandHandler"
+  mediatr_queries: []
+  audit_events:
+    - "WorkflowEnabled"
+    - "WorkflowDisabled"
+  localization_keys:
+    - "Workflow.Enabled.Success"
+    - "Workflow.Disabled.Success"
+    - "Workflow.NotFound"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "workflow:def:{tenantId}:{workflowId}"
+    ttl: "10m"

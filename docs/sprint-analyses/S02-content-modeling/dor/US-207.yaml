@@ -1,0 +1,122 @@
+# --- Required Fields ---
+story_id: "US-207"
+title: "Content alias support for direct record access"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.8"
+sprint: "S02"
+priority: "P2"
+
+# --- User Story Statement ---
+role: "As an Editor"
+action: "I want to assign aliases to content items (e.g., logo, site-title, address)"
+benefit: "So that specific content records can be accessed directly by alias in templates and API calls"
+
+# --- Interface Contract ---
+inputs:
+  - name: "contentItemId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "4x8r2k9m1n0p"
+  - name: "alias"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(200), Matches('^[a-z0-9][a-z0-9-]*$')"
+    example: "site-logo"
+
+outputs:
+  - name: "contentItem"
+    type: "ContentItemDto"
+    description: "Content item with alias assigned"
+  - name: "aliasUrl"
+    type: "string"
+    description: "Direct access URL using the alias"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentManagement.EditOwn"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+  data_model:
+    content_type: "dynamic"
+    parts:
+      - "AliasPart"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/content/{contentType}/{contentItemId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Alias assigned to content item"
+      - 400: "Invalid alias format"
+      - 403: "User lacks permission"
+      - 409: "Alias already in use by another content item"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Assign alias to content item"
+    given: "Content item of type 'SiteAyarlari' exists and AliasPart is attached"
+    when: "Editor sets alias='site-logo' on the content item"
+    then: "Alias is saved, content item retrievable via alias lookup"
+
+  - id: "AT-002"
+    scenario: "Retrieve content item by alias"
+    given: "Content item has alias 'site-logo' assigned"
+    when: "Template or API requests content by alias 'site-logo'"
+    then: "Correct content item is returned with all parts and fields"
+
+  - id: "AT-003"
+    scenario: "Reject duplicate alias"
+    given: "Content item A has alias 'firma-adresi'"
+    when: "Editor tries to assign alias 'firma-adresi' to content item B"
+    then: "System returns 409 Conflict — alias must be unique within tenant"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Alias with Turkish characters"
+    input: "alias = 'sirket-unvani' (lowercase, ASCII-compatible)"
+    expected: "Alias accepted. Note: aliases must be lowercase ASCII with hyphens only"
+
+  - id: "EC-002"
+    scenario: "Removing alias from content item"
+    input: "Editor clears the alias field on a content item that had alias 'eski-logo'"
+    expected: "Alias is removed, previous alias 'eski-logo' becomes available for other items"
+
+  - id: "EC-003"
+    scenario: "Alias lookup for non-existent alias"
+    input: "Request for alias='yok-olan-icerik'"
+    expected: "System returns null/404, no error thrown"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands:
+    - "AssignContentAliasCommand"
+    - "AssignContentAliasCommandHandler"
+  mediatr_queries:
+    - "GetContentByAliasQuery"
+    - "GetContentByAliasQueryHandler"
+  audit_events:
+    - "ContentAliasAssigned"
+    - "ContentAliasRemoved"
+  localization_keys:
+    - "ContentModeling.Alias.Assigned.Success"
+    - "ContentModeling.Alias.Validation.Format"
+    - "ContentModeling.Alias.Validation.Duplicate"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "alias:{tenantId}:{aliasValue}"
+    ttl: "10m"

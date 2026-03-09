@@ -1,0 +1,138 @@
+# US-706: Workflow Execution Engine
+# Spec: 4.1.7.4 - Workflow execution after trigger
+
+story_id: "US-706"
+title: "Workflow execution engine with trigger, run, and status tracking"
+module: "ProjectDora.Modules.Workflows"
+spec_refs:
+  - "4.1.7.4"
+sprint: "S06"
+priority: "P1"
+
+role: "As a WorkflowAdmin"
+action: "I want to manually trigger workflows and track their execution status"
+benefit: "So that I can test workflows, handle ad-hoc automation needs, and monitor execution outcomes"
+
+inputs:
+  - name: "workflowId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "wf-icerik-onay-001"
+  - name: "context"
+    type: "Dictionary<string, object>"
+    required: false
+    validation: ""
+    example: '{"contentItemId": "ci-duyuru-001", "triggeredBy": "admin"}'
+
+outputs:
+  - name: "executionId"
+    type: "string"
+    description: "Unique ID of the workflow execution instance"
+  - name: "status"
+    type: "string"
+    description: "Execution status: Idle, Running, Completed, Faulted"
+  - name: "startedUtc"
+    type: "DateTime"
+    description: "When execution started"
+  - name: "completedUtc"
+    type: "DateTime"
+    description: "When execution completed (null if still running)"
+  - name: "currentActivity"
+    type: "string"
+    description: "Currently executing activity ID (null if completed)"
+  - name: "error"
+    type: "string"
+    description: "Error message if status is Faulted"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Workflow.Execute"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+      - "Analyst"
+  data_model:
+    content_type: "WorkflowExecution"
+    parts: []
+    fields: []
+  api:
+    endpoint: "POST /api/v1/workflows/{workflowId}/run"
+    request_content_type: "application/json"
+    response_codes:
+      - 202: "Workflow execution started"
+      - 400: "Workflow is disabled or invalid"
+      - 403: "User lacks Workflow.Execute permission"
+      - 404: "Workflow definition not found"
+
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Manually trigger workflow execution"
+    given: "User has Workflow.Execute permission and workflow 'IcerikOnayAkisi' is enabled"
+    when: "User sends POST /api/v1/workflows/{workflowId}/run with context data"
+    then: "Returns 202 with executionId, execution status transitions: Idle -> Running -> Completed"
+  - id: "AT-002"
+    scenario: "Workflow execution completes successfully"
+    given: "Workflow has trigger -> email -> log pipeline"
+    when: "Workflow is triggered and all activities succeed"
+    then: "Execution status=Completed, completedUtc set, all activity results recorded"
+  - id: "AT-003"
+    scenario: "Workflow execution faults on activity error"
+    given: "Workflow has trigger -> HttpRequestTask (external API down)"
+    when: "Workflow triggers and HttpRequestTask fails"
+    then: "Execution status=Faulted, error message recorded, audit event WorkflowFaulted emitted"
+  - id: "AT-004"
+    scenario: "Reject manual trigger without permission"
+    given: "User has Viewer role (no Workflow.Execute permission)"
+    when: "User sends POST /api/v1/workflows/{workflowId}/run"
+    then: "API returns 403 Forbidden"
+  - id: "AT-005"
+    scenario: "Reject trigger on disabled workflow"
+    given: "Workflow 'IcerikOnayAkisi' isEnabled=false"
+    when: "User sends POST /api/v1/workflows/{workflowId}/run"
+    then: "API returns 400 with error: workflow is disabled"
+
+edge_cases:
+  - id: "EC-001"
+    scenario: "Concurrent workflow executions"
+    input: "Rapidly trigger same workflow 10 times in parallel"
+    expected: "10 independent execution instances created, each runs to completion independently, no race conditions"
+  - id: "EC-002"
+    scenario: "Workflow with infinite loop potential"
+    input: "Workflow has circular transition A -> B -> A without exit condition"
+    expected: "Execution halted at max step limit (default 1000), status=Faulted, error='Maximum execution steps exceeded'"
+  - id: "EC-003"
+    scenario: "Large context payload"
+    input: "Context dictionary with 100 keys and large JSON values"
+    expected: "Execution starts successfully, context accessible by all activities, no serialization errors"
+
+dependencies:
+  stories: ["US-701", "US-702", "US-704", "US-705"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Workflows"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IWorkflowService"
+  mediatr_commands:
+    - "TriggerWorkflowCommand"
+    - "TriggerWorkflowCommandHandler"
+  mediatr_queries:
+    - "GetWorkflowExecutionQuery"
+    - "GetWorkflowExecutionQueryHandler"
+  audit_events:
+    - "WorkflowTriggered"
+    - "WorkflowCompleted"
+    - "WorkflowFaulted"
+  localization_keys:
+    - "Workflow.Execution.Started"
+    - "Workflow.Execution.Completed"
+    - "Workflow.Execution.Faulted"
+    - "Workflow.Execution.MaxStepsExceeded"
+    - "Workflow.Execution.DisabledError"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

@@ -1,0 +1,146 @@
+# --- Required Fields ---
+story_id: "US-210"
+title: "SEO meta support and full-text search indexing configuration"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.11"
+  - "4.1.2.13"
+sprint: "S02"
+priority: "P2"
+
+# --- User Story Statement ---
+role: "As a TenantAdmin"
+action: "I want to add SEO meta fields to page-type content types and configure which fields are full-text indexed"
+benefit: "So that published pages are optimized for search engines and internal search finds content based on the right fields"
+
+# --- Interface Contract ---
+inputs:
+  - name: "typeName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100)"
+    example: "DuyuruSayfasi"
+  - name: "seoEnabled"
+    type: "bool"
+    required: false
+    validation: ""
+    example: true
+  - name: "indexedFields"
+    type: "List<string>"
+    required: false
+    validation: ""
+    example: "[\"ProgramAdi\", \"Aciklama\", \"AnahtarKelimeler\"]"
+  - name: "metaKeywords"
+    type: "string"
+    required: false
+    validation: "MaxLength(500)"
+    example: "KOSGEB, KOBi destegi, teknoloji gelistirme, hibe programi"
+  - name: "metaDescription"
+    type: "string"
+    required: false
+    validation: "MaxLength(300)"
+    example: "KOSGEB KOBi Teknoloji Gelistirme Destek Programi hakkinda detayli bilgi"
+
+outputs:
+  - name: "contentType"
+    type: "ContentTypeDto"
+    description: "Content type with SEO part and search index configuration"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentModeling.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+  data_model:
+    content_type: "ContentTypeDefinition"
+    parts:
+      - "SeoMetaPart"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/content-types/{typeName}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "SEO and index configuration updated"
+      - 400: "Validation error (invalid field names for indexing)"
+      - 403: "User lacks ContentModeling.Manage permission"
+      - 404: "Content type not found"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Attach SEO meta part to page-type content"
+    given: "Content type 'DuyuruSayfasi' exists without SEO part"
+    when: "Admin enables SEO support for 'DuyuruSayfasi'"
+    then: "SeoMetaPart attached, editors see meta keywords and meta description fields when editing"
+
+  - id: "AT-002"
+    scenario: "Configure full-text search indexing for specific fields"
+    given: "Content type 'DestekProgrami' has fields ProgramAdi, Butce, Aciklama"
+    when: "Admin marks ProgramAdi and Aciklama as full-text indexed, but not Butce"
+    then: "Lucene index configuration updated, only ProgramAdi and Aciklama are searchable via full-text"
+
+  - id: "AT-003"
+    scenario: "SEO meta rendered in page HTML"
+    given: "Content item has meta keywords='KOSGEB, destek' and meta description set"
+    when: "Page is rendered on the front-end"
+    then: "HTML <head> contains <meta name='keywords'> and <meta name='description'> tags"
+
+  - id: "AT-004"
+    scenario: "Search finds content only in indexed fields"
+    given: "Field 'ProgramAdi' is indexed, field 'InternalNotes' is not indexed"
+    when: "User searches for a term that exists only in InternalNotes"
+    then: "Content item is NOT found via full-text search"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Turkish keywords in SEO meta"
+    input: "metaKeywords = 'KOBi destegi, girisimcilik, Sirnak, teknoloji' (with Turkish characters)"
+    expected: "Turkish characters preserved in meta tags and rendered correctly in HTML"
+
+  - id: "EC-002"
+    scenario: "Index configuration for non-existent field"
+    input: "indexedFields includes 'OlmayanAlan' which doesn't exist on the content type"
+    expected: "API returns 400 validation error listing invalid field name"
+
+  - id: "EC-003"
+    scenario: "Removing SEO part from content type"
+    input: "Admin removes SeoMetaPart from a content type that has items with SEO data"
+    expected: "Part removed from type definition. Existing items retain SEO data in JSON but it's no longer editable or rendered."
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201", "US-202"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands:
+    - "ConfigureSeoPartCommand"
+    - "ConfigureSeoPartCommandHandler"
+    - "ConfigureSearchIndexCommand"
+    - "ConfigureSearchIndexCommandHandler"
+  mediatr_queries:
+    - "GetSearchIndexConfigQuery"
+    - "GetSearchIndexConfigQueryHandler"
+  audit_events:
+    - "ContentTypeSeoConfigured"
+    - "ContentTypeSearchIndexConfigured"
+  localization_keys:
+    - "ContentModeling.Seo.MetaKeywords"
+    - "ContentModeling.Seo.MetaDescription"
+    - "ContentModeling.Search.IndexField"
+    - "ContentModeling.Search.FieldNotFound"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "contenttype:{tenantId}:{typeName}"
+    ttl: "30m"

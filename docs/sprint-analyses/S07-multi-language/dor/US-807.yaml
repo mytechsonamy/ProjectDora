@@ -1,0 +1,105 @@
+# US-807: RTL Layout Support Foundation
+# Spec: 4.1.8.1 — Multi-language support with RTL consideration
+
+story_id: "US-807"
+title: "RTL (right-to-left) layout foundation for Arabic and other RTL languages"
+module: "ProjectDora.Modules.Localization"
+spec_refs:
+  - "4.1.8.1"
+sprint: "S07"
+priority: "P2"
+
+role: "As a TenantAdmin"
+action: "I want the platform to automatically apply a right-to-left layout when an RTL language (such as Arabic) is activated and selected"
+benefit: "So that Arabic-speaking stakeholders or KOSGEB international partners can use the platform without text direction issues causing broken layouts"
+
+inputs:
+  - name: "culture"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MustBeActivatedCulture"
+    example: "ar"
+  - name: "currentPage"
+    type: "string"
+    required: false
+    validation: "MaxLength(2000), MustBeLocalUrl"
+    example: "/ar/destek-programlari"
+
+outputs:
+  - name: "htmlDir"
+    type: "string"
+    description: "HTML dir attribute value: 'rtl' for RTL cultures, 'ltr' for LTR cultures"
+  - name: "isRtl"
+    type: "bool"
+    description: "Whether the active culture is RTL"
+  - name: "cssClass"
+    type: "string"
+    description: "CSS class applied to the body element: 'rtl-layout' or 'ltr-layout'"
+
+constraints:
+  rbac:
+    required_permissions: []
+    denied_roles: []
+  data_model:
+    content_type: "N/A (layout/rendering concern)"
+    parts:
+      - "SiteCultureSettings (IsRtl flag per culture)"
+    fields:
+      - "IsRtl (bool, derived from CultureInfo.TextInfo.IsRightToLeft)"
+  api:
+    endpoint: "N/A (server-side rendered HTML attribute — not a REST endpoint)"
+    request_content_type: "text/html"
+    response_codes:
+      - 200: "Page rendered with correct dir attribute and RTL CSS class"
+
+acceptance_tests:
+  - id: "AT-807-001"
+    scenario: "HTML dir='rtl' applied when Arabic culture is active"
+    given: "Arabic ('ar') is activated and visitor selects Arabic via CulturePicker"
+    when: "Any page renders with culture='ar'"
+    then: "HTML element has dir='rtl', body has class 'rtl-layout', rtl.css stylesheet is included in page head"
+  - id: "AT-807-002"
+    scenario: "LTR layout preserved for Turkish and English"
+    given: "Active culture is Turkish ('tr') or English ('en')"
+    when: "Any page renders"
+    then: "HTML element has dir='ltr', body has class 'ltr-layout', rtl.css is NOT included"
+  - id: "AT-807-003"
+    scenario: "Liquid template RTL conditional works correctly"
+    given: "Liquid template contains: '{% if Culture.IsRtl %}margin-right: 0; margin-left: auto;{% else %}margin-left: 0; margin-right: auto;{% endif %}'"
+    when: "Page renders with Arabic culture"
+    then: "Liquid template renders 'margin-right: 0; margin-left: auto;' branch"
+  - id: "AT-807-004"
+    scenario: "RTL CSS logical properties apply to main layout containers"
+    given: "rtl.css includes CSS logical properties for padding, margin, border, and float"
+    when: "Page renders with Arabic culture"
+    then: "Layout containers use 'padding-inline-start' instead of 'padding-left', 'float: inline-end' instead of 'float: right'"
+
+edge_cases:
+  - id: "EC-807-001"
+    scenario: "Mixed RTL/LTR content on same page"
+    input: "Page has Arabic culture active; embeds an English code snippet or Latin URL"
+    expected: "Overall page has dir='rtl'; English/Latin inline content uses unicode-bidi: embed to maintain correct rendering for embedded LTR text"
+  - id: "EC-807-002"
+    scenario: "RTL culture deactivated after content is published in that culture"
+    input: "Arabic deactivated by TenantAdmin, but Arabic content items still exist in database"
+    expected: "Arabic content items remain in database (not deleted); if accessed via direct URL, rendered as LTR (default fallback); CulturePicker no longer shows Arabic"
+
+dependencies:
+  stories: ["US-801", "US-803"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Localization"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "ICultureService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "GetCultureDirectionQuery"
+    - "GetCultureDirectionQueryHandler"
+  audit_events: []
+  localization_keys:
+    - "Culture.Direction.RTL"
+    - "Culture.Direction.LTR"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "localization:direction:{tenantId}:{culture}"
+    ttl: "1h"

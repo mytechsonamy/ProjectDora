@@ -1,0 +1,171 @@
+# --- Required Fields ---
+story_id: "US-102"
+title: "Role-based custom admin menu management"
+module: "ProjectDora.Modules.AdminPanel"
+spec_refs:
+  - "4.1.1.2"
+sprint: "S01"
+priority: "P1"
+
+# --- User Story Statement ---
+role: "As a TenantAdmin"
+action: "I want to create custom navigation menus that are visible only to users with specific roles"
+benefit: "So that each role sees only the admin functions relevant to their responsibilities"
+
+# --- Interface Contract ---
+inputs:
+  - name: "menuName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(200)"
+    example: "Icerik Yonetimi"
+  - name: "position"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(0, 1000)"
+    example: 10
+  - name: "iconClass"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "fa fa-file-text"
+  - name: "url"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(500)"
+    example: "/admin/content-items"
+  - name: "requiredPermissions"
+    type: "List<string>"
+    required: true
+    validation: "NotEmpty"
+    example: "['ContentManagement.ViewDraft', 'ContentManagement.Create']"
+  - name: "parentMenuId"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "content-management"
+
+outputs:
+  - name: "menuItemId"
+    type: "string"
+    description: "Unique identifier for the created menu item"
+  - name: "menuName"
+    type: "string"
+    description: "Display name of the menu item"
+  - name: "position"
+    type: "int"
+    description: "Sort order position"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "AdminPanel.ManageMenus"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "AdminMenu"
+    parts:
+      - "TitlePart"
+    fields:
+      - name: "Url"
+        type: "TextField"
+      - name: "IconClass"
+        type: "TextField"
+      - name: "Position"
+        type: "NumericField"
+      - name: "RequiredPermissions"
+        type: "TextField"
+  api:
+    endpoint: "POST /api/v1/admin/menus"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "Menu item created"
+      - 400: "Validation error (empty name, invalid URL)"
+      - 403: "User lacks AdminPanel.ManageMenus permission"
+      - 409: "Duplicate menu item name at same level"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Create top-level admin menu item"
+    given: "User has TenantAdmin role with AdminPanel.ManageMenus permission"
+    when: "User creates menu item 'Icerik Yonetimi' with URL '/admin/content-items' and permission 'ContentManagement.ViewDraft'"
+    then: "Menu item is created, returned with menuItemId, visible to users with ContentManagement.ViewDraft permission"
+
+  - id: "AT-002"
+    scenario: "Menu filtered by user permissions"
+    given: "Menu item 'Sorgu Yonetimi' requires 'QueryEngine.Execute' permission, and user has Author role (no QueryEngine.Execute)"
+    when: "Author user loads the admin panel"
+    then: "The 'Sorgu Yonetimi' menu item is NOT visible in the navigation"
+
+  - id: "AT-003"
+    scenario: "Create nested sub-menu item"
+    given: "Parent menu 'Icerik Yonetimi' exists with ID 'content-management'"
+    when: "User creates child menu 'Yeni Icerik' under parent 'content-management'"
+    then: "Sub-menu item appears nested under parent in navigation tree"
+
+  - id: "AT-004"
+    scenario: "Reject menu creation without permission"
+    given: "User has Editor role without AdminPanel.ManageMenus permission"
+    when: "User tries to create a new menu item"
+    then: "System returns 403 Forbidden"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Turkish characters in menu name"
+    input: "menuName = 'Coklu Dil Yapilandirmasi'"
+    expected: "Menu created successfully with Turkish characters preserved in display and URL slug"
+
+  - id: "EC-002"
+    scenario: "Duplicate menu name at same hierarchy level"
+    input: "Two menu items named 'Icerik Yonetimi' at root level"
+    expected: "System returns 409 Conflict for the second creation attempt"
+
+  - id: "EC-003"
+    scenario: "Menu with no users having required permission"
+    input: "Menu requires permission 'NonExistent.Permission' that no role has"
+    expected: "Menu created successfully but not visible to any user (orphaned menu — admin warning logged)"
+
+# --- Dependencies ---
+dependencies:
+  stories:
+    - "US-101"
+  modules:
+    - "ProjectDora.Core"
+    - "OrchardCore.Admin"
+    - "OrchardCore.Navigation"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IAuthService"
+  mediatr_commands:
+    - "CreateAdminMenuCommand"
+    - "CreateAdminMenuCommandHandler"
+    - "UpdateAdminMenuCommand"
+    - "UpdateAdminMenuCommandHandler"
+    - "DeleteAdminMenuCommand"
+    - "DeleteAdminMenuCommandHandler"
+  mediatr_queries:
+    - "GetAdminMenusQuery"
+    - "GetAdminMenusQueryHandler"
+  audit_events:
+    - "AdminMenuCreated"
+    - "AdminMenuUpdated"
+    - "AdminMenuDeleted"
+  localization_keys:
+    - "AdminMenu.Created.Success"
+    - "AdminMenu.Updated.Success"
+    - "AdminMenu.Deleted.Success"
+    - "AdminMenu.Validation.NameRequired"
+    - "AdminMenu.Validation.DuplicateName"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "admin:menu:{tenantId}:{roleId}"
+    ttl: "10m"

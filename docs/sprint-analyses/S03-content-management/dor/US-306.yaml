@@ -1,0 +1,134 @@
+# --- Required Fields ---
+story_id: "US-306"
+title: "SEO-friendly URL generation via AutoroutePart"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.3.7"
+sprint: "S03"
+priority: "P2"
+
+# --- User Story Statement ---
+role: "As an SEOUzmani"
+action: "I want content items to have SEO-friendly URLs generated from configurable patterns with the ability to customize"
+benefit: "So that KOSGEB web pages rank well in search engines and have human-readable URLs"
+
+# --- Interface Contract ---
+inputs:
+  - name: "contentItemId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "4f9a8b2c3d1e"
+  - name: "customPath"
+    type: "string"
+    required: false
+    validation: "MaxLength(500), Matches('^[a-z0-9-/]+$')"
+    example: "destek-programlari/kobi-teknoloji-destegi-2026"
+  - name: "pattern"
+    type: "string"
+    required: false
+    validation: "MaxLength(500)"
+    example: "{{ Model.ContentItem | display_text | slugify }}"
+
+outputs:
+  - name: "path"
+    type: "string"
+    description: "Generated or custom URL path (slug)"
+  - name: "fullUrl"
+    type: "string"
+    description: "Complete URL including base domain"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentManagement.EditOwn"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "dynamic"
+    parts:
+      - "AutoroutePart"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/content/{contentType}/{contentItemId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Content item updated with URL path"
+      - 400: "Invalid URL path format"
+      - 409: "URL path already taken by another content item"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Auto-generate slug from Turkish display text"
+    given: "Content item with displayText='KOBİ Teknoloji Geliştirme Desteği' and AutoroutePart pattern configured"
+    when: "Content item is saved"
+    then: "AutoroutePart generates path='kobi-teknoloji-gelistirme-destegi' (Turkish chars transliterated)"
+
+  - id: "AT-002"
+    scenario: "Custom URL path override"
+    given: "Content item exists with auto-generated slug"
+    when: "User sets customPath='destek/kobi-teknoloji-2026'"
+    then: "Content is accessible at /destek/kobi-teknoloji-2026 instead of the auto-generated path"
+
+  - id: "AT-003"
+    scenario: "Duplicate slug gets suffix"
+    given: "Another content item already has path='kobi-teknoloji-destegi'"
+    when: "New content item with same displayText is created"
+    then: "System generates path='kobi-teknoloji-destegi-2' with numeric suffix"
+
+  - id: "AT-004"
+    scenario: "Content accessible via generated URL"
+    given: "Published content item with path='destek-programlari/kobi-destegi'"
+    when: "Anonymous user navigates to /destek-programlari/kobi-destegi"
+    then: "System returns the published content item"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Display text with only Turkish special characters"
+    input: "displayText = 'Şşçğüöı'"
+    expected: "Slug generated as 'sscguoi' — all Turkish characters correctly transliterated"
+
+  - id: "EC-002"
+    scenario: "Empty display text for slug generation"
+    input: "displayText is empty or whitespace"
+    expected: "System falls back to contentItemId as slug path"
+
+  - id: "EC-003"
+    scenario: "Custom path with invalid characters"
+    input: "customPath = 'Destek Programı / KOBİ'"
+    expected: "API returns 400 — path must match ^[a-z0-9-/]+$ (lowercase, no spaces, no Turkish chars)"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-301"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentService"
+  mediatr_commands:
+    - "UpdateContentUrlCommand"
+    - "UpdateContentUrlCommandHandler"
+  mediatr_queries:
+    - "ResolveContentByUrlQuery"
+    - "ResolveContentByUrlQueryHandler"
+  audit_events:
+    - "ContentItemUrlChanged"
+  localization_keys:
+    - "Content.Url.Generated"
+    - "Content.Url.DuplicateResolved"
+    - "Content.Url.InvalidFormat"
+    - "Content.Url.AlreadyTaken"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "route:{tenantId}:{path}"
+    ttl: "30m"

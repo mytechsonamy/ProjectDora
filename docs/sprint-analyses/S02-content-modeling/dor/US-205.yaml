@@ -1,0 +1,127 @@
+# --- Required Fields ---
+story_id: "US-205"
+title: "SQL-queryable typed index tables for content fields"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.6"
+sprint: "S02"
+priority: "P1"
+
+# --- User Story Statement ---
+role: "As an Analyst"
+action: "I want content fields to be stored in typed index tables (text, numeric, boolean columns)"
+benefit: "So that I can write SQL queries against strongly-typed columns to analyze content data"
+
+# --- Interface Contract ---
+inputs:
+  - name: "typeName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100)"
+    example: "DestekProgrami"
+  - name: "fieldName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100)"
+    example: "ProgramButcesi"
+
+outputs:
+  - name: "indexTableName"
+    type: "string"
+    description: "Name of the YesSql index table for this field type"
+  - name: "indexRecordCount"
+    type: "int"
+    description: "Number of indexed records for this content type"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentModeling.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+  data_model:
+    content_type: "ContentTypeDefinition"
+    parts: []
+    fields:
+      - "TextFieldIndex"
+      - "NumericFieldIndex"
+      - "BooleanFieldIndex"
+  api:
+    endpoint: "GET /api/v1/content-types/{typeName}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Content type with index information"
+      - 404: "Content type not found"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "TextField indexed in text index table"
+    given: "Content type 'DestekProgrami' has TextField 'ProgramAdi' and content items exist"
+    when: "SQL query is executed against TextFieldIndex table"
+    then: "Text values are queryable with WHERE clause on text column, matching content items found"
+
+  - id: "AT-002"
+    scenario: "NumericField indexed in numeric index table"
+    given: "Content type 'DestekProgrami' has NumericField 'Butce' with values 100000, 250000"
+    when: "SQL query filters NumericFieldIndex WHERE value > 150000"
+    then: "Only content items with Butce > 150000 returned"
+
+  - id: "AT-003"
+    scenario: "BooleanField indexed in boolean index table"
+    given: "Content type 'DestekProgrami' has BooleanField 'AktifMi' with true/false values"
+    when: "SQL query filters BooleanFieldIndex WHERE value = true"
+    then: "Only active programs returned"
+
+  - id: "AT-004"
+    scenario: "Index auto-updated on content save"
+    given: "Content item with NumericField 'Butce' = 100000 exists"
+    when: "Content item is updated with Butce = 200000"
+    then: "NumericFieldIndex table row is updated to reflect new value"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Null field values in index tables"
+    input: "Content item created without setting optional NumericField 'Butce'"
+    expected: "Index row created with NULL value, SQL queries with IS NULL work correctly"
+
+  - id: "EC-002"
+    scenario: "Index rebuild after field type change"
+    input: "Field 'Deger' changed from TextField to NumericField on existing content type"
+    expected: "Old TextFieldIndex entries removed, new NumericFieldIndex entries created. Non-numeric existing values logged as warnings."
+
+  - id: "EC-003"
+    scenario: "Turkish text in TextFieldIndex"
+    input: "TextField value = 'Sirnak Ilcesi KOBi Destegi' (with Turkish characters)"
+    expected: "Turkish characters correctly stored and queryable in text index, case-insensitive search with Turkish locale works"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201", "US-202"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands:
+    - "RebuildContentIndexCommand"
+    - "RebuildContentIndexCommandHandler"
+  mediatr_queries:
+    - "GetIndexStatisticsQuery"
+    - "GetIndexStatisticsQueryHandler"
+  audit_events:
+    - "ContentIndexRebuilt"
+  localization_keys:
+    - "ContentModeling.Index.RebuildStarted"
+    - "ContentModeling.Index.RebuildCompleted"
+    - "ContentModeling.Index.FieldTypeChanged.Warning"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

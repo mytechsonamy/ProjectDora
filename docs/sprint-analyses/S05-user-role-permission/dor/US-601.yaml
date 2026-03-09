@@ -1,0 +1,159 @@
+# US-601: Create and manage users (unlimited, CRUD)
+story_id: "US-601"
+title: "Create and manage users with no upper limit"
+module: "ProjectDora.Modules.UserManagement"
+spec_refs:
+  - "4.1.6.1"
+sprint: "S05"
+priority: "P0"
+
+role: "As a TenantAdmin"
+action: "I want to create, read, update, and delete user accounts with no upper limit"
+benefit: "So that I can manage all platform users within my tenant without artificial restrictions"
+
+inputs:
+  - name: "userName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100), Matches('^[a-zA-Z0-9._@-]+$')"
+    example: "mehmet.yilmaz"
+  - name: "email"
+    type: "string"
+    required: true
+    validation: "NotEmpty, EmailAddress, MaxLength(256)"
+    example: "mehmet.yilmaz@kosgeb.gov.tr"
+  - name: "password"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MinLength(8), MaxLength(128), Matches('(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)')"
+    example: "Kosgeb2026!"
+  - name: "displayName"
+    type: "string"
+    required: false
+    validation: "MaxLength(200)"
+    example: "Mehmet Yilmaz"
+  - name: "roles"
+    type: "List<string>"
+    required: false
+    validation: "Each role must exist in tenant"
+    example: '["Editor", "Analyst"]'
+
+outputs:
+  - name: "userId"
+    type: "string"
+    description: "Unique identifier of the created user"
+  - name: "userName"
+    type: "string"
+    description: "Username of the created user"
+  - name: "email"
+    type: "string"
+    description: "Email address of the created user"
+  - name: "enabled"
+    type: "bool"
+    description: "Whether the user account is active"
+  - name: "roles"
+    type: "List<string>"
+    description: "Assigned role names"
+  - name: "createdUtc"
+    type: "DateTime"
+    description: "Timestamp of user creation"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "UserRolePermission.ManageUsers"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "User"
+    parts:
+      - "UserProfile"
+    fields: []
+  api:
+    endpoint: "POST /api/v1/users"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "User created successfully"
+      - 400: "Validation error (invalid email, weak password, etc.)"
+      - 403: "User lacks UserRolePermission.ManageUsers permission"
+      - 409: "Email or username already exists in this tenant"
+
+acceptance_tests:
+  - id: "AT-601-01"
+    scenario: "Create user with valid data"
+    given: "TenantAdmin is authenticated and has ManageUsers permission"
+    when: "TenantAdmin submits valid user data (userName='ahmet.demir', email='ahmet@kosgeb.gov.tr', password='Kosgeb2026!')"
+    then: "User is created, API returns 201 with userId, user appears in user list"
+  - id: "AT-601-02"
+    scenario: "Reject duplicate email within tenant"
+    given: "User with email 'mehmet@kosgeb.gov.tr' already exists in current tenant"
+    when: "TenantAdmin submits new user with same email"
+    then: "API returns 409 Conflict with error message 'Email already exists'"
+  - id: "AT-601-03"
+    scenario: "List users with pagination"
+    given: "50 users exist in the current tenant"
+    when: "TenantAdmin requests GET /api/v1/users?page=2&pageSize=20"
+    then: "API returns users 21-40 with totalCount=50"
+  - id: "AT-601-04"
+    scenario: "Delete user"
+    given: "User 'test-user-001' exists in current tenant"
+    when: "TenantAdmin sends DELETE /api/v1/users/test-user-001"
+    then: "User is soft-deleted, cannot login, audit event 'UserDeleted' emitted"
+  - id: "AT-601-05"
+    scenario: "Unauthorized user cannot create users"
+    given: "User has Editor role (no ManageUsers permission)"
+    when: "User attempts POST /api/v1/users"
+    then: "API returns 403 Forbidden"
+
+edge_cases:
+  - id: "EC-601-01"
+    scenario: "Turkish special characters in displayName"
+    input: "displayName = 'Seref Gungor Ozcaliskan'"
+    expected: "User created successfully, Turkish characters (s with cedilla, g with breve, o with diaeresis, c with cedilla, i without dot) preserved in storage and retrieval"
+  - id: "EC-601-02"
+    scenario: "Password with only lowercase letters"
+    input: "password = 'kosgeb2026'"
+    expected: "API returns 400 — password must contain at least one uppercase letter"
+  - id: "EC-601-03"
+    scenario: "Same email in different tenants"
+    input: "email='admin@kosgeb.gov.tr' in tenant-a (already exists) and tenant-b"
+    expected: "User created successfully in tenant-b — email uniqueness is per-tenant"
+
+dependencies:
+  stories: ["US-101"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.AdminPanel"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IUserService"
+  mediatr_commands:
+    - "CreateUserCommand"
+    - "CreateUserCommandHandler"
+    - "UpdateUserCommand"
+    - "UpdateUserCommandHandler"
+    - "DeleteUserCommand"
+    - "DeleteUserCommandHandler"
+  mediatr_queries:
+    - "GetUserQuery"
+    - "GetUserQueryHandler"
+    - "ListUsersQuery"
+    - "ListUsersQueryHandler"
+  audit_events:
+    - "UserCreated"
+    - "UserUpdated"
+    - "UserDeleted"
+  localization_keys:
+    - "User.Created.Success"
+    - "User.Validation.EmailRequired"
+    - "User.Validation.EmailDuplicate"
+    - "User.Validation.PasswordWeak"
+    - "User.Validation.UserNameInvalid"
+    - "User.Deleted.Success"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "user:{tenantId}:{userId}"
+    ttl: "10m"

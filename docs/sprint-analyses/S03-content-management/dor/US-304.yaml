@@ -1,0 +1,140 @@
+# --- Required Fields ---
+story_id: "US-304"
+title: "Multi-language content variant creation"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.3.4"
+sprint: "S03"
+priority: "P2"
+
+# --- User Story Statement ---
+role: "As an Editor"
+action: "I want to create language variants of content items for each activated language"
+benefit: "So that KOSGEB can serve content in multiple languages to diverse stakeholders"
+
+# --- Interface Contract ---
+inputs:
+  - name: "sourceContentItemId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "4f9a8b2c3d1e"
+  - name: "targetCulture"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(10), Must be valid BCP 47 code"
+    example: "en"
+  - name: "displayText"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(500)"
+    example: "SME Technology Development Support 2026"
+  - name: "parts"
+    type: "object"
+    required: false
+    validation: ""
+    example: '{"TitlePart": {"Title": "SME Technology Development Support 2026"}, "BodyPart": {"Body": "<p>This program provides technology development support for SMEs.</p>"}}'
+
+outputs:
+  - name: "contentItemId"
+    type: "string"
+    description: "ID of the newly created language variant"
+  - name: "culture"
+    type: "string"
+    description: "BCP 47 culture code of the new variant"
+  - name: "localizationSet"
+    type: "string"
+    description: "Shared localization set ID linking all language variants"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentManagement.Create"
+      - "ContentManagement.EditOwn"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "dynamic"
+    parts:
+      - "LocalizationPart"
+      - "TitlePart"
+      - "BodyPart"
+      - "CommonPart"
+    fields: []
+  api:
+    endpoint: "POST /api/v1/content/{contentType}"
+    request_content_type: "application/json"
+    response_codes:
+      - 201: "Language variant created successfully"
+      - 400: "Validation error (invalid culture code, translation already exists)"
+      - 403: "User lacks ContentManagement.Create permission"
+      - 404: "Source content item not found"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Create English translation of Turkish content"
+    given: "Turkish content item 'abc123' exists with culture='tr' and localizationSet='set-001'"
+    when: "User submits create with sourceContentItemId='abc123', targetCulture='en', displayText='SME Technology Support'"
+    then: "System creates new content item with culture='en', localizationSet='set-001', status=Draft"
+
+  - id: "AT-002"
+    scenario: "List available translations for a content item"
+    given: "Content item has translations in 'tr' and 'en'"
+    when: "User queries for translations of the content item"
+    then: "System returns list of 2 content items sharing the same localizationSet, each with distinct culture"
+
+  - id: "AT-003"
+    scenario: "Reject duplicate translation for same language"
+    given: "Content item 'abc123' already has an English (en) translation"
+    when: "User tries to create another English translation for the same localizationSet"
+    then: "System returns 400 with error: translation already exists for culture 'en' in this localization set"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Create translation with invalid culture code"
+    input: "targetCulture = 'xx-INVALID'"
+    expected: "API returns 400 with validation error: invalid BCP 47 culture code"
+
+  - id: "EC-002"
+    scenario: "Create translation for content without LocalizationPart"
+    input: "sourceContentItemId references a content type that does not have LocalizationPart attached"
+    expected: "System automatically assigns a new localizationSet to the source item, then creates the translation"
+
+  - id: "EC-003"
+    scenario: "Translation of published content defaults to draft"
+    input: "Source content item is Published, user creates English translation"
+    expected: "New translation is created with status=Draft regardless of source status"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-301"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentService"
+  mediatr_commands:
+    - "CreateContentTranslationCommand"
+    - "CreateContentTranslationCommandHandler"
+  mediatr_queries:
+    - "GetContentTranslationsQuery"
+    - "GetContentTranslationsQueryHandler"
+  audit_events:
+    - "ContentItemTranslationCreated"
+  localization_keys:
+    - "Content.Translation.Created.Success"
+    - "Content.Translation.AlreadyExists"
+    - "Content.Translation.InvalidCulture"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "content:translations:{tenantId}:{localizationSet}"
+    ttl: "10m"

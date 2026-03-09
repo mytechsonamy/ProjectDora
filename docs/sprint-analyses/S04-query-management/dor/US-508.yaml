@@ -1,0 +1,119 @@
+# US-508: Query Integration with Liquid Templates and Workflows
+# Spec: 4.1.5.6 — Queries callable from theme code editor and workflow activities
+
+story_id: "US-508"
+title: "Execute saved queries from Liquid templates and workflow activities"
+module: "ProjectDora.Modules.QueryEngine"
+spec_refs:
+  - "4.1.5.6"
+sprint: "S04"
+priority: "P2"
+
+role: "As an Editor"
+action: "I want to use saved queries within Liquid templates and workflow activities"
+benefit: "So that I can display dynamic query results on themed pages and automate data-driven workflow logic"
+
+inputs:
+  - name: "queryName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(200)"
+    example: "destek_programlari_aktif"
+  - name: "parameters"
+    type: "Dictionary<string, object>"
+    required: false
+    validation: ""
+    example: "{ 'kategori': 'teknoloji' }"
+  - name: "source"
+    type: "string"
+    required: true
+    validation: "Must(BeOneOf('Liquid', 'Workflow'))"
+    example: "Liquid"
+
+outputs:
+  - name: "items"
+    type: "List<ContentItemDto>"
+    description: "Query result items accessible in Liquid or workflow context"
+  - name: "totalCount"
+    type: "int"
+    description: "Total matching results"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "QueryEngine.Execute"
+    denied_roles:
+      - "Anonymous"
+  data_model:
+    content_type: "SavedQuery"
+    parts: []
+    fields: []
+  api:
+    endpoint: "N/A (internal — Liquid filter and workflow activity, not a REST endpoint)"
+    request_content_type: "N/A"
+    response_codes:
+      - 200: "Query results available in template/workflow context"
+      - 500: "Query execution failed — logged, empty results returned to template"
+
+acceptance_tests:
+  - id: "AT-508-001"
+    scenario: "Execute query from Liquid template"
+    given: "SavedQuery 'destek_programlari_aktif' exists and Liquid template uses query tag"
+    when: "Page renders with Liquid: {% assign results = Queries.ExecuteQuery 'destek_programlari_aktif' %}"
+    then: "Template receives query results, items are iterable with {{ item.displayText }}"
+  - id: "AT-508-002"
+    scenario: "Execute query from workflow activity"
+    given: "Workflow has QueryActivity step with queryName='kobi_rapor' and parameter kategori='uretim'"
+    when: "Workflow reaches the QueryActivity step"
+    then: "Query executes with parameter, results stored in workflow context for subsequent activities"
+  - id: "AT-508-003"
+    scenario: "Query failure in Liquid does not crash page"
+    given: "SavedQuery referenced in Liquid template has syntax error"
+    when: "Page renders"
+    then: "Empty results returned to template, error logged, page renders without crash"
+  - id: "AT-508-004"
+    scenario: "Parameterized query from Liquid with Turkish values"
+    given: "Liquid template passes Turkish parameter: {% assign results = Queries.ExecuteQuery 'sehir_arama', sehir: 'İstanbul' %}"
+    when: "Page renders"
+    then: "Query executes with sehir='İstanbul', Turkish characters handled correctly"
+
+edge_cases:
+  - id: "EC-508-001"
+    scenario: "Referenced query does not exist"
+    input: "Liquid template references queryName='silinmis_sorgu' which was deleted"
+    expected: "Empty results returned, warning logged: 'Query silinmis_sorgu not found'"
+  - id: "EC-508-002"
+    scenario: "Workflow query returns large result set"
+    input: "Query returns 10,000 results, workflow only needs first 5"
+    expected: "Query executes with implicit pageSize limit (100 max), workflow processes available results"
+  - id: "EC-508-003"
+    scenario: "Circular query reference in workflow"
+    input: "Workflow activity A calls query that triggers another workflow which calls the same query"
+    expected: "System detects recursion depth > 3, stops execution, logs error"
+
+dependencies:
+  stories: ["US-502", "US-507"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.QueryEngine"
+    - "ProjectDora.Modules.Workflows"
+  external: []
+
+tech_notes:
+  abstraction_interface: "IQueryService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "ExecuteSavedQuery"
+    - "ExecuteSavedQueryHandler"
+  audit_events:
+    - "QueryExecuted"
+  localization_keys:
+    - "Query.Liquid.Executed"
+    - "Query.Liquid.NotFound"
+    - "Query.Liquid.ExecutionError"
+    - "Query.Workflow.Executed"
+    - "Query.Workflow.ExecutionError"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "query:saved:{tenantId}:{queryName}:{paramHash}"
+    ttl: "5m"

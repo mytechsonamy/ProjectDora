@@ -1,0 +1,115 @@
+# US-605: Define per-content-type granular permissions
+story_id: "US-605"
+title: "Define per-content-type granular permissions (copy, edit, delete, view)"
+module: "ProjectDora.Modules.UserManagement"
+spec_refs:
+  - "4.1.6.2"
+sprint: "S05"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want to assign content-type-specific permissions (copy, edit, delete, view) to roles"
+benefit: "So that I can control which user roles can perform which operations on each specific content type"
+
+inputs:
+  - name: "roleId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "role-destek-yoneticisi"
+  - name: "contentTypePermissions"
+    type: "List<ContentTypePermissionDto>"
+    required: true
+    validation: "Each contentTypeName must exist, each action must be one of: View, Edit, Delete, Copy"
+    example: '[{"contentTypeName": "DestekProgrami", "actions": ["View", "Edit"]}, {"contentTypeName": "Duyuru", "actions": ["View", "Edit", "Delete", "Copy"]}]'
+
+outputs:
+  - name: "roleId"
+    type: "string"
+    description: "Role ID whose content-type permissions were updated"
+  - name: "contentTypePermissions"
+    type: "List<ContentTypePermissionDto>"
+    description: "Updated content-type-specific permissions for the role"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "UserRolePermission.ManageRoles"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "Role"
+    parts: []
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/roles/{roleId}/content-type-permissions"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Content-type permissions updated"
+      - 400: "Validation error (invalid content type or action)"
+      - 403: "User lacks UserRolePermission.ManageRoles permission"
+      - 404: "Role not found"
+
+acceptance_tests:
+  - id: "AT-605-01"
+    scenario: "Assign content-type-specific permissions"
+    given: "Role 'Destek Yoneticisi' exists, content types 'DestekProgrami' and 'Duyuru' exist"
+    when: "TenantAdmin assigns View+Edit for DestekProgrami and View only for Duyuru"
+    then: "Role gets ContentType.DestekProgrami.View, ContentType.DestekProgrami.Edit, ContentType.Duyuru.View"
+  - id: "AT-605-02"
+    scenario: "User can only access permitted content type"
+    given: "User has role with ContentType.DestekProgrami.View but NOT ContentType.Duyuru.View"
+    when: "User requests GET /api/v1/content/Duyuru"
+    then: "API returns 403 Forbidden"
+  - id: "AT-605-03"
+    scenario: "User can edit permitted type but not delete"
+    given: "User has ContentType.DestekProgrami.Edit but NOT ContentType.DestekProgrami.Delete"
+    when: "User attempts DELETE /api/v1/content/DestekProgrami/{id}"
+    then: "API returns 403 Forbidden"
+  - id: "AT-605-04"
+    scenario: "Permission matrix view"
+    given: "TenantAdmin is on role editor screen"
+    when: "TenantAdmin requests content-type permissions for a role"
+    then: "API returns matrix of all content types x actions with current grant status"
+
+edge_cases:
+  - id: "EC-605-01"
+    scenario: "Content type deleted after permission assignment"
+    input: "ContentType 'OldType' is deleted, role still has ContentType.OldType.View permission"
+    expected: "Orphaned permissions are ignored during permission checks (no error), cleaned up on next role edit"
+  - id: "EC-605-02"
+    scenario: "Invalid action name"
+    input: "actions = ['View', 'Modify'] (Modify is not valid)"
+    expected: "API returns 400 — 'Modify' is not a valid action, must be one of: View, Edit, Delete, Copy"
+  - id: "EC-605-03"
+    scenario: "Content type with Turkish name"
+    input: "contentTypeName = 'KobiBasvuru', actions = ['View', 'Edit']"
+    expected: "Permissions created: ContentType.KobiBasvuru.View, ContentType.KobiBasvuru.Edit"
+
+dependencies:
+  stories: ["US-602", "US-604"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.UserManagement", "ProjectDora.Modules.ContentModeling"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IRoleService"
+  mediatr_commands:
+    - "UpdateContentTypePermissionsCommand"
+    - "UpdateContentTypePermissionsCommandHandler"
+  mediatr_queries:
+    - "GetContentTypePermissionMatrixQuery"
+    - "GetContentTypePermissionMatrixQueryHandler"
+  audit_events:
+    - "ContentTypePermissionsUpdated"
+  localization_keys:
+    - "Role.ContentTypePermissions.Updated.Success"
+    - "Role.ContentTypePermissions.Validation.InvalidContentType"
+    - "Role.ContentTypePermissions.Validation.InvalidAction"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "role:{tenantId}:{roleId}:ctperms"
+    ttl: "10m"

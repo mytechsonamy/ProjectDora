@@ -1,0 +1,150 @@
+# --- Required Fields ---
+story_id: "US-302"
+title: "Draft/Publish/Unpublish lifecycle with preview"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.3.2"
+  - "4.1.3.3"
+sprint: "S03"
+priority: "P1"
+
+# --- User Story Statement ---
+role: "As an Editor"
+action: "I want to manage the publish lifecycle of content items (draft, publish, unpublish, preview)"
+benefit: "So that I can review content before making it publicly visible on the KOSGEB website"
+
+# --- Interface Contract ---
+inputs:
+  - name: "contentItemId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "4f9a8b2c3d1e"
+  - name: "contentType"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100)"
+    example: "Duyuru"
+  - name: "scheduledUtc"
+    type: "DateTime"
+    required: false
+    validation: "Must be in the future if provided"
+    example: "2026-04-01T09:00:00Z"
+
+outputs:
+  - name: "contentItemId"
+    type: "string"
+    description: "ID of the published/unpublished content item"
+  - name: "status"
+    type: "string"
+    description: "New status after operation: Draft, Published, or Scheduled"
+  - name: "publishedUtc"
+    type: "DateTime"
+    description: "Timestamp when the content was published (null if draft)"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentManagement.Publish"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "dynamic"
+    parts:
+      - "CommonPart"
+      - "PublishLaterPart"
+    fields: []
+  api:
+    endpoint: "POST /api/v1/content/{contentType}/{contentItemId}/publish"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Content item published successfully"
+      - 403: "User lacks ContentManagement.Publish permission"
+      - 404: "Content item not found"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Publish a draft content item"
+    given: "Content item exists with status=Draft and user has Editor role with Publish permission"
+    when: "User submits POST /api/v1/content/Duyuru/abc123/publish"
+    then: "System returns 200, status changes to Published, publishedUtc is set to current time"
+
+  - id: "AT-002"
+    scenario: "Unpublish a published content item"
+    given: "Content item exists with status=Published"
+    when: "User submits POST /api/v1/content/Duyuru/abc123/unpublish"
+    then: "System returns 200, status reverts to Draft, publishedUtc is cleared"
+
+  - id: "AT-003"
+    scenario: "Schedule future publication"
+    given: "Content item exists with status=Draft"
+    when: "User submits POST /api/v1/content/Duyuru/abc123/publish with scheduledUtc='2026-04-01T09:00:00Z'"
+    then: "System returns 200, status changes to Scheduled, content auto-publishes at the scheduled time"
+
+  - id: "AT-004"
+    scenario: "Preview draft content"
+    given: "Content item exists with status=Draft and user has ContentManagement.ViewDraft permission"
+    when: "User navigates to /admin/preview/abc123"
+    then: "Admin panel renders the draft content using the active theme's templates"
+
+  - id: "AT-005"
+    scenario: "Author cannot publish content"
+    given: "User has Author role (no ContentManagement.Publish permission)"
+    when: "User submits POST /api/v1/content/Duyuru/abc123/publish"
+    then: "System returns 403 Forbidden"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Publish already published content"
+    input: "POST publish on content item that is already Published"
+    expected: "Operation is idempotent — returns 200 with current state, publishedUtc unchanged"
+
+  - id: "EC-002"
+    scenario: "Schedule with past date"
+    input: "scheduledUtc = '2025-01-01T00:00:00Z' (date in the past)"
+    expected: "API returns 400 with validation error: scheduled date must be in the future"
+
+  - id: "EC-003"
+    scenario: "Unpublish a draft content item"
+    input: "POST unpublish on content item that is already Draft"
+    expected: "Operation is idempotent — returns 200 with status=Draft, no state change"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-301"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentService"
+  mediatr_commands:
+    - "PublishContentItemCommand"
+    - "PublishContentItemCommandHandler"
+    - "UnpublishContentItemCommand"
+    - "UnpublishContentItemCommandHandler"
+    - "ScheduleContentItemCommand"
+    - "ScheduleContentItemCommandHandler"
+  mediatr_queries: []
+  audit_events:
+    - "ContentItemPublished"
+    - "ContentItemUnpublished"
+    - "ContentItemScheduled"
+  localization_keys:
+    - "Content.Published.Success"
+    - "Content.Unpublished.Success"
+    - "Content.Scheduled.Success"
+    - "Content.Validation.ScheduledDateMustBeFuture"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "content:{tenantId}:{contentType}:{contentItemId}"
+    ttl: "5m"

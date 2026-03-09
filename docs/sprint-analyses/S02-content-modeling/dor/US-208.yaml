@@ -1,0 +1,115 @@
+# --- Required Fields ---
+story_id: "US-208"
+title: "Gallery part attachable to content types"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.9"
+sprint: "S02"
+priority: "P2"
+
+# --- User Story Statement ---
+role: "As a TenantAdmin"
+action: "I want to attach a gallery feature to custom content types"
+benefit: "So that content items can have image galleries for visual presentation of KOSGEB programs and events"
+
+# --- Interface Contract ---
+inputs:
+  - name: "typeName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100)"
+    example: "Etkinlik"
+  - name: "partName"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "MediaGalleryPart"
+
+outputs:
+  - name: "contentType"
+    type: "ContentTypeDto"
+    description: "Updated content type with gallery part attached"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentModeling.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+  data_model:
+    content_type: "ContentTypeDefinition"
+    parts:
+      - "MediaField"
+    fields:
+      - "MediaField"
+  api:
+    endpoint: "PUT /api/v1/content-types/{typeName}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Gallery part added to content type"
+      - 400: "Validation error"
+      - 403: "User lacks ContentModeling.Manage permission"
+      - 404: "Content type not found"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Attach gallery part to content type"
+    given: "Content type 'Etkinlik' exists without gallery"
+    when: "Admin adds gallery part (multiple MediaField or custom GalleryPart) to 'Etkinlik'"
+    then: "Content type updated, gallery feature available when creating/editing 'Etkinlik' items"
+
+  - id: "AT-002"
+    scenario: "Add multiple images to gallery"
+    given: "Content type 'Etkinlik' has gallery part and a content item exists"
+    when: "Editor adds 5 images to the gallery via media picker"
+    then: "All 5 images stored and associated with the content item, retrievable in order"
+
+  - id: "AT-003"
+    scenario: "Reorder gallery images"
+    given: "Gallery has 5 images in order A, B, C, D, E"
+    when: "Editor reorders to C, A, E, B, D"
+    then: "New order persisted and reflected in API response and front-end rendering"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Empty gallery"
+    input: "Content item with gallery part but no images added"
+    expected: "Gallery renders as empty, no errors. API returns empty media array for gallery."
+
+  - id: "EC-002"
+    scenario: "Gallery with deleted media reference"
+    input: "Gallery references an image that was deleted from media library"
+    expected: "Broken reference handled gracefully — missing image shown as placeholder or skipped, no server error"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201", "US-202"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+    - "ProjectDora.Modules.AdminPanel"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands:
+    - "AttachPartToContentTypeCommand"
+    - "AttachPartToContentTypeCommandHandler"
+  mediatr_queries: []
+  audit_events:
+    - "ContentTypePartAttached"
+  localization_keys:
+    - "ContentModeling.Gallery.PartName"
+    - "ContentModeling.Gallery.AddImage"
+    - "ContentModeling.Gallery.Reorder"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "contenttype:{tenantId}:{typeName}"
+    ttl: "30m"

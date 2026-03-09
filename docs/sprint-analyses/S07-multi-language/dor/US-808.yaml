@@ -1,0 +1,144 @@
+# US-808: ILocalizationService Abstraction and Translation Status Tracking
+# Spec: 4.1.8.1 — Abstraction layer over Orchard Core localization; translation coverage visibility
+
+story_id: "US-808"
+title: "ILocalizationService abstraction interface and translation status tracking with dashboard coverage report"
+module: "ProjectDora.Modules.Localization"
+spec_refs:
+  - "4.1.8.1"
+sprint: "S07"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want a translation status dashboard that shows which content items have been translated into each activated language and which are missing, draft, or outdated"
+benefit: "So that KOSGEB content managers can prioritize translation work, track coverage across DestekProgrami and Duyuru content types, and ensure no language variant is accidentally left unpublished"
+
+inputs:
+  - name: "contentType"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "DestekProgrami"
+  - name: "culture"
+    type: "string"
+    required: false
+    validation: "MustBeActivatedCulture"
+    example: "en"
+  - name: "statusFilter"
+    type: "string"
+    required: false
+    validation: "Must(BeOneOf('Missing', 'Draft', 'Published', 'Outdated', 'All'))"
+    example: "Missing"
+  - name: "page"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 10000)"
+    example: 1
+  - name: "pageSize"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 100)"
+    example: 20
+
+outputs:
+  - name: "coverageMatrix"
+    type: "TranslationCoverageMatrixDto"
+    description: "Coverage percentage per content type per culture (e.g., DestekProgrami: tr=100%, en=62%, Missing=18)"
+  - name: "items"
+    type: "PagedResult<TranslationStatusItemDto>"
+    description: "Per-content-item translation status list with culture, status, sourceModifiedUtc, translationPublishedUtc"
+  - name: "totalMissing"
+    type: "int"
+    description: "Total count of missing translations across all content types and cultures"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Localization.ViewTranslations"
+    denied_roles:
+      - "Anonymous"
+  data_model:
+    content_type: "TranslationStatus (computed — not persisted)"
+    parts:
+      - "LocalizationPart (Culture, LocalizationSet per content item)"
+    fields:
+      - "Status: Missing | Draft | Published | Outdated"
+      - "SourceModifiedUtc (DateTime)"
+      - "TranslationPublishedUtc (DateTime?)"
+  api:
+    endpoint: "GET /api/v1/localization/translations/status"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Translation status data returned successfully"
+      - 400: "Invalid filter parameters"
+      - 403: "User lacks Localization.ViewTranslations permission"
+
+acceptance_tests:
+  - id: "AT-808-001"
+    scenario: "Translation status is 'Missing' when no variant exists for an activated culture"
+    given: "DestekProgrami item exists in Turkish only; English is an activated culture"
+    when: "Translation status query runs for that content item"
+    then: "Status for 'en' = 'Missing' — no English variant exists for this localization set"
+  - id: "AT-808-002"
+    scenario: "Translation status is 'Draft' when variant exists but is unpublished"
+    given: "DestekProgrami has a Turkish (Published) and an English (Draft) variant"
+    when: "Translation status query runs"
+    then: "Status for 'en' = 'Draft' — English variant exists but has not been published"
+  - id: "AT-808-003"
+    scenario: "Translation status is 'Published' when variant is published"
+    given: "DestekProgrami has Turkish (Published) and English (Published) variants"
+    when: "Translation status query runs"
+    then: "Status for both 'tr' and 'en' = 'Published'"
+  - id: "AT-808-004"
+    scenario: "Translation status is 'Outdated' when source updated after translation published"
+    given: "DestekProgrami has Turkish (Published at T1) and English (Published at T0, T0 < T1)"
+    when: "Turkish source is updated and republished at T1 after English was published at T0"
+    then: "Status for 'en' = 'Outdated' — English translation predates the most recent Turkish source update"
+  - id: "AT-808-005"
+    scenario: "Coverage matrix shows per-content-type percentage"
+    given: "DestekProgrami: 10 items total, 10 Turkish Published, 6 English Published, 2 English Draft, 2 English Missing"
+    when: "TenantAdmin calls GET /api/v1/localization/translations/status"
+    then: "Coverage matrix shows: DestekProgrami — tr: 100%, en: 60% published (2 draft, 2 missing)"
+
+edge_cases:
+  - id: "EC-808-001"
+    scenario: "ILocalizationService is called with a culture that was recently deactivated"
+    input: "French ('fr') was active and had translations, then deactivated; status query runs"
+    expected: "Deactivated cultures are excluded from status matrix — French data not shown; existing French content items still accessible via direct URL but not tracked in status"
+  - id: "EC-808-002"
+    scenario: "Tenant with no translated content at all"
+    input: "New tenant with only Turkish active and 50 Turkish content items; English just activated"
+    expected: "Coverage matrix shows: all content types — en: 0% (50 Missing); totalMissing = 50; no errors or exceptions"
+  - id: "EC-808-003"
+    scenario: "Status computation performance for large tenant"
+    input: "Tenant has 5,000 content items across 3 cultures (15,000 status records to compute)"
+    expected: "Response returns within 3 seconds using Redis cache (WriteThrough, 5m TTL); cache hit returns within 200ms"
+
+dependencies:
+  stories: ["US-801", "US-802"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Localization", "ProjectDora.Modules.ContentManagement"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "ILocalizationService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "GetTranslationStatusQuery"
+    - "GetTranslationStatusQueryHandler"
+    - "GetTranslationCoverageMatrixQuery"
+    - "GetTranslationCoverageMatrixQueryHandler"
+    - "GetOutdatedTranslationsQuery"
+    - "GetOutdatedTranslationsQueryHandler"
+  audit_events: []
+  localization_keys:
+    - "Translation.Status.Missing"
+    - "Translation.Status.Draft"
+    - "Translation.Status.Published"
+    - "Translation.Status.Outdated"
+    - "Translation.Coverage.Title"
+    - "Translation.Coverage.Percent"
+    - "Translation.Dashboard.TotalMissing"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "localization:status:{tenantId}:{contentType}:{culture}"
+    ttl: "5m"

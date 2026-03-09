@@ -1,0 +1,155 @@
+# US-904: Versioned Diff Viewer
+# Spec: 4.1.9.4 — Display content differences between versions with a change tracking tool
+
+story_id: "US-904"
+title: "View field-level diff between two content versions in the audit trail"
+module: "ProjectDora.Modules.AuditTrail"
+spec_refs:
+  - "4.1.9.4"
+sprint: "S08"
+priority: "P1"
+
+role: "As a Denetci (Auditor)"
+action: "I want to select any two versions of a content item and see a side-by-side comparison of what fields changed between them"
+benefit: "So that I can understand exactly what was modified, added, or removed between any two points in a content item's history without having to inspect full JSON dumps manually"
+
+inputs:
+  - name: "contentItemId"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(26)"
+    example: "4n3a5h8e2k1t9v6y7p0w"
+  - name: "fromVersion"
+    type: "int"
+    required: true
+    validation: "GreaterThan(0)"
+    example: 2
+  - name: "toVersion"
+    type: "int"
+    required: true
+    validation: "GreaterThan(0), NotEqualTo(fromVersion)"
+    example: 5
+
+outputs:
+  - name: "contentItemId"
+    type: "string"
+    description: "Content item ID that was diffed"
+  - name: "fromVersion"
+    type: "int"
+    description: "The source (older) version number"
+  - name: "toVersion"
+    type: "int"
+    description: "The target (newer) version number"
+  - name: "fromVersionTimestamp"
+    type: "DateTime"
+    description: "UTC timestamp of the source version"
+  - name: "toVersionTimestamp"
+    type: "DateTime"
+    description: "UTC timestamp of the target version"
+  - name: "changes"
+    type: "List<FieldChangeDto>"
+    description: "List of field-level changes: each entry has fieldPath, changeType (Added/Removed/Modified), oldValue, newValue"
+  - name: "totalChangedFields"
+    type: "int"
+    description: "Total number of fields that changed between the two versions"
+  - name: "computedAtUtc"
+    type: "DateTime"
+    description: "Timestamp when this diff was computed (may be from cache)"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "AuditTrail.ViewDiff"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "N/A (computed, not stored — result cached in Redis)"
+    parts: []
+    fields: []
+  api:
+    endpoint: "GET /api/v1/audit/diff/{contentItemId}?fromVersion={n}&toVersion={m}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Diff computed and returned successfully"
+      - 400: "Invalid version numbers or fromVersion equals toVersion"
+      - 403: "User lacks AuditTrail.ViewDiff permission"
+      - 404: "Content item not found or requested version does not exist"
+      - 422: "Content item too large for diff computation (>512KB)"
+      - 408: "Diff computation timeout for very large content"
+
+acceptance_tests:
+  - id: "AT-904-001"
+    scenario: "Side-by-side diff shows modified text field"
+    given: "Content item 'Duyuru X' exists with version 1 (title='KOBİ Desteği') and version 2 (title='KOBİ Hibe Desteği'); user has Denetci role"
+    when: "User requests diff between version 1 and version 2"
+    then: "Response includes a change entry for field 'ContentItem.Title' with changeType=Modified, oldValue='KOBİ Desteği', newValue='KOBİ Hibe Desteği'"
+  - id: "AT-904-002"
+    scenario: "Diff shows added field"
+    given: "Version 1 has no 'Body' field; version 2 has 'Body' field with content"
+    when: "User requests diff between version 1 and version 2"
+    then: "Response includes a change entry for 'ContentItem.Body' with changeType=Added, oldValue=null, newValue=<body content>"
+  - id: "AT-904-003"
+    scenario: "Diff shows removed field"
+    given: "Version 1 has a 'Tags' field with ['teknoloji', 'destek']; version 2 has Tags field removed"
+    when: "User requests diff between version 1 and version 2"
+    then: "Response includes a change entry for 'ContentItem.Tags' with changeType=Removed, oldValue=['teknoloji', 'destek'], newValue=null"
+  - id: "AT-904-004"
+    scenario: "Diff between same version returns empty changes"
+    given: "Content item exists at version 3"
+    when: "User accidentally requests diff with fromVersion=3 and toVersion=3"
+    then: "API returns 400 with a descriptive error message — cannot diff a version with itself"
+  - id: "AT-904-005"
+    scenario: "Turkish content in diff is preserved correctly"
+    given: "Version 1 has text 'Şırnak İlçesi Küçük Ölçekli KOBİ'; version 2 has 'Şırnak İli Küçük Ölçekli KOBİ'"
+    when: "User requests diff"
+    then: "Diff output correctly shows oldValue with 'İlçesi' and newValue with 'İli'; all Turkish characters (İ, ı, Ş, ş, Ö, ü, Ç) are preserved without encoding errors"
+
+edge_cases:
+  - id: "EC-904-001"
+    scenario: "Requested version number does not exist for the content item"
+    input: "fromVersion=99 (content item only has 5 versions)"
+    expected: "API returns 404 — version 99 does not exist for this content item"
+  - id: "EC-904-002"
+    scenario: "Content item JSON exceeds the 512KB size limit for diff"
+    input: "Content item with binary attachment metadata embedded in JSON exceeds 512KB"
+    expected: "API returns 422 Unprocessable Entity with message explaining the size limit; suggests downloading the raw version JSON for manual comparison"
+  - id: "EC-904-003"
+    scenario: "Diff result served from cache on repeated request"
+    input: "Same diff request made twice within 10 minutes"
+    expected: "Second request is served from Redis cache (computedAtUtc is identical to the first response); database is not queried again"
+
+dependencies:
+  stories: ["US-901", "US-902", "US-907"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.AuditTrail"
+    - "ProjectDora.Modules.ContentManagement"
+  external:
+    - "JsonDiffPatch.Net (NuGet: JsonDiffPatch.Net, MIT license)"
+
+tech_notes:
+  abstraction_interface: "IAuditService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "GetContentVersionDiffQuery"
+    - "GetContentVersionDiffQueryHandler"
+    - "GetContentVersionHistoryQuery"
+    - "GetContentVersionHistoryQueryHandler"
+  audit_events:
+    - "ContentDiffViewed"
+  localization_keys:
+    - "Audit.Diff.NotFound"
+    - "Audit.Diff.VersionNotFound"
+    - "Audit.Diff.SameVersionError"
+    - "Audit.Diff.ContentTooLarge"
+    - "Audit.Diff.ChangeType.Added"
+    - "Audit.Diff.ChangeType.Removed"
+    - "Audit.Diff.ChangeType.Modified"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "audit:diff:{tenantId}:{contentItemId}:{fromVersion}:{toVersion}"
+    ttl: "10m"

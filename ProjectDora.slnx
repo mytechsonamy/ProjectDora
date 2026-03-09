@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ProjectDora.Core/ProjectDora.Core.csproj" />
+    <Project Path="src/ProjectDora.Web/ProjectDora.Web.csproj" />
+  </Folder>
+  <Folder Name="/src/ProjectDora.Modules/">
+    <Project Path="src/ProjectDora.Modules/ProjectDora.AuditTrail/ProjectDora.AuditTrail.csproj" />
+    <Project Path="src/ProjectDora.Modules/ProjectDora.ContentModeling/ProjectDora.ContentModeling.csproj" />
+    <Project Path="src/ProjectDora.Modules/ProjectDora.Integration/ProjectDora.Integration.csproj" />
+    <Project Path="src/ProjectDora.Modules/ProjectDora.QueryEngine/ProjectDora.QueryEngine.csproj" />
+    <Project Path="src/ProjectDora.Modules/ProjectDora.Workflows/ProjectDora.Workflows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ProjectDora.Core.Tests/ProjectDora.Core.Tests.csproj" />
+    <Project Path="tests/ProjectDora.Modules.Tests/ProjectDora.Modules.Tests.csproj" />
+  </Folder>
+</Solution>

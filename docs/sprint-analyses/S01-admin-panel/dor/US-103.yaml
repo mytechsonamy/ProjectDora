@@ -1,0 +1,170 @@
+# --- Required Fields ---
+story_id: "US-103"
+title: "File and media management module"
+module: "ProjectDora.Modules.AdminPanel"
+spec_refs:
+  - "4.1.1.3"
+sprint: "S01"
+priority: "P1"
+
+# --- User Story Statement ---
+role: "As an Editor"
+action: "I want to upload, organize, rename, and delete files through the admin panel"
+benefit: "So that I can manage all media assets used in content across the platform"
+
+# --- Interface Contract ---
+inputs:
+  - name: "file"
+    type: "File"
+    required: true
+    validation: "NotEmpty, MaxFileSize(50MB), AllowedExtensions(.jpg,.jpeg,.png,.gif,.svg,.webp,.pdf,.docx,.xlsx,.mp4,.mp3)"
+    example: "kosgeb-logo.png"
+  - name: "folder"
+    type: "string"
+    required: false
+    validation: "MaxLength(500), Matches('^[a-zA-Z0-9/_-]+$')"
+    example: "images/logos"
+  - name: "newName"
+    type: "string"
+    required: false
+    validation: "MaxLength(255), Matches('^[a-zA-Z0-9._-]+$')"
+    example: "kosgeb-logo-2026.png"
+
+outputs:
+  - name: "mediaPath"
+    type: "string"
+    description: "Relative path of the uploaded/moved file"
+  - name: "mediaUrl"
+    type: "string"
+    description: "Public URL for accessing the media file"
+  - name: "fileSize"
+    type: "long"
+    description: "File size in bytes"
+  - name: "mimeType"
+    type: "string"
+    description: "MIME type of the uploaded file"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "Media.Upload"
+      - "Media.Delete"
+      - "Media.ManageFolders"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Denetci"
+  data_model:
+    content_type: "N/A"
+    parts: []
+    fields: []
+  api:
+    endpoint: "POST /api/v1/media"
+    request_content_type: "multipart/form-data"
+    response_codes:
+      - 201: "File uploaded successfully"
+      - 400: "Invalid file type or size exceeded"
+      - 403: "User lacks Media.Upload permission"
+      - 409: "File with same name exists in folder"
+      - 413: "File too large"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Upload image file"
+    given: "User has Editor role with Media.Upload permission"
+    when: "User uploads 'kosgeb-logo.png' (500KB, image/png) to folder 'images/logos'"
+    then: "File is stored in MinIO, mediaPath and mediaUrl returned, file accessible via URL"
+
+  - id: "AT-002"
+    scenario: "Create folder in media library"
+    given: "User has TenantAdmin role with Media.ManageFolders permission"
+    when: "User creates folder 'documents/2026'"
+    then: "Folder created in media storage, listed in folder tree"
+
+  - id: "AT-003"
+    scenario: "Delete media file"
+    given: "File 'images/old-logo.png' exists and user has Media.Delete permission"
+    when: "User deletes the file"
+    then: "File removed from MinIO storage, URL returns 404"
+
+  - id: "AT-004"
+    scenario: "Rename media file"
+    given: "File 'images/logo.png' exists and user has Media.Upload permission"
+    when: "User renames file to 'kosgeb-logo-v2.png'"
+    then: "File renamed, old URL no longer accessible, new URL works"
+
+  - id: "AT-005"
+    scenario: "Reject upload without permission"
+    given: "User has Viewer role (no Media.Upload permission)"
+    when: "User attempts to upload a file"
+    then: "System returns 403 Forbidden"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Upload file exceeding size limit"
+    input: "file = 60MB video file (limit is 50MB)"
+    expected: "System returns 413 with clear error message about 50MB limit"
+
+  - id: "EC-002"
+    scenario: "Upload file with disallowed extension"
+    input: "file = 'script.exe' (executable file)"
+    expected: "System returns 400 with error listing allowed file extensions"
+
+  - id: "EC-003"
+    scenario: "Turkish characters in folder name"
+    input: "folder = 'gorseller/turk-is'"
+    expected: "Folder created successfully, path normalized to ASCII-safe characters for URL compatibility"
+
+  - id: "EC-004"
+    scenario: "Duplicate filename in same folder"
+    input: "Upload 'logo.png' to folder 'images' where 'logo.png' already exists"
+    expected: "System returns 409 Conflict, user must rename or choose different folder"
+
+# --- Dependencies ---
+dependencies:
+  stories:
+    - "US-101"
+  modules:
+    - "ProjectDora.Core"
+    - "OrchardCore.Media"
+    - "OrchardCore.Media.AmazonS3"
+  external:
+    - "MinIO (S3-compatible object storage)"
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentService"
+  mediatr_commands:
+    - "UploadMediaCommand"
+    - "UploadMediaCommandHandler"
+    - "DeleteMediaCommand"
+    - "DeleteMediaCommandHandler"
+    - "RenameMediaCommand"
+    - "RenameMediaCommandHandler"
+    - "CreateMediaFolderCommand"
+    - "CreateMediaFolderCommandHandler"
+  mediatr_queries:
+    - "ListMediaQuery"
+    - "ListMediaQueryHandler"
+    - "GetMediaByPathQuery"
+    - "GetMediaByPathQueryHandler"
+  audit_events:
+    - "MediaUploaded"
+    - "MediaDeleted"
+    - "MediaRenamed"
+    - "MediaFolderCreated"
+  localization_keys:
+    - "Media.Upload.Success"
+    - "Media.Upload.InvalidType"
+    - "Media.Upload.SizeExceeded"
+    - "Media.Delete.Success"
+    - "Media.Rename.Success"
+    - "Media.Folder.Created"
+    - "Media.Error.DuplicateFile"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "media:folder:{tenantId}:{folderPath}"
+    ttl: "5m"

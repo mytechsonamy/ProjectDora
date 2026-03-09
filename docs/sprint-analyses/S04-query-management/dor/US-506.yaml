@@ -1,0 +1,131 @@
+# US-506: SQL Query Development with Safety Validation
+# Spec: 4.1.5.4 — SQL and Lucene query development on installation database
+
+story_id: "US-506"
+title: "Develop and execute SQL queries with safety validation"
+module: "ProjectDora.Modules.QueryEngine"
+spec_refs:
+  - "4.1.5.4"
+sprint: "S04"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want to create SQL queries that run against the analytics database with automatic safety validation"
+benefit: "So that I can extract business insights from structured data while preventing accidental data modification"
+
+inputs:
+  - name: "sql"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(10000), Must(PassSqlSafetyValidation)"
+    example: "SELECT program_adi, butce, kategori FROM analytics.destek_programlari WHERE durum = @durum AND tenant_id = @tenantId"
+  - name: "parameters"
+    type: "Dictionary<string, object>"
+    required: false
+    validation: ""
+    example: "{ 'durum': 'aktif' }"
+  - name: "commandTimeout"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 30)"
+    example: 30
+
+outputs:
+  - name: "columns"
+    type: "List<string>"
+    description: "Column names from SQL result set"
+  - name: "rows"
+    type: "List<Dictionary<string, object>>"
+    description: "Query result rows"
+  - name: "totalCount"
+    type: "int"
+    description: "Number of rows returned"
+  - name: "executionTimeMs"
+    type: "int"
+    description: "SQL execution time in milliseconds"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "QueryEngine.Manage"
+      - "QueryEngine.Execute"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "SavedQuery"
+    parts: []
+    fields: []
+  api:
+    endpoint: "POST /api/v1/queries/{queryId}/execute"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "SQL query executed successfully"
+      - 400: "SQL safety validation failed or syntax error"
+      - 403: "User lacks QueryEngine.Manage permission"
+      - 408: "Query timeout exceeded (30 seconds max)"
+      - 422: "SQL contains forbidden keywords (INSERT, UPDATE, DELETE, DROP, etc.)"
+
+acceptance_tests:
+  - id: "AT-506-001"
+    scenario: "Valid SELECT query executes successfully"
+    given: "Analytics schema has 'destek_programlari' table with data, user has TenantAdmin role"
+    when: "User submits: SELECT program_adi, butce FROM analytics.destek_programlari WHERE durum = @durum"
+    then: "Query executes with parameterized @durum, returns rows with program_adi and butce columns"
+  - id: "AT-506-002"
+    scenario: "DROP TABLE blocked by safety validator"
+    given: "User has TenantAdmin role"
+    when: "User submits: DROP TABLE analytics.destek_programlari"
+    then: "API returns 422 with message: SQL contains forbidden keyword 'DROP'"
+  - id: "AT-506-003"
+    scenario: "Tenant isolation enforced on SQL queries"
+    given: "User belongs to Tenant-A, query does not include tenant_id filter"
+    when: "User submits: SELECT * FROM analytics.destek_programlari"
+    then: "System automatically injects 'WHERE tenant_id = @tenantId' before execution"
+  - id: "AT-506-004"
+    scenario: "Parameterized query prevents SQL injection"
+    given: "User has TenantAdmin role"
+    when: "User provides parameter: durum = \"aktif'; DROP TABLE users;--\""
+    then: "Parameter is safely bound via NpgsqlParameter — no injection occurs, query executes normally"
+
+edge_cases:
+  - id: "EC-506-001"
+    scenario: "SQL injection via UNION attack"
+    input: "sql = 'SELECT program_adi FROM analytics.destek_programlari UNION SELECT password FROM orchard.users'"
+    expected: "Query blocked — 'orchard' schema access denied by database-level permissions"
+  - id: "EC-506-002"
+    scenario: "CTE-based bypass attempt"
+    input: "sql = 'WITH del AS (DELETE FROM analytics.destek_programlari RETURNING *) SELECT * FROM del'"
+    expected: "SQL safety validator detects DELETE keyword, returns 422"
+  - id: "EC-506-003"
+    scenario: "Turkish column names in SQL"
+    input: "sql = 'SELECT program_adi, başlangıç_tarihi FROM analytics.destek_programlari'"
+    expected: "Query executes successfully, Turkish characters in column names handled by PostgreSQL"
+
+dependencies:
+  stories: ["US-502"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.QueryEngine"]
+  external: ["PostgreSQL analytics schema"]
+
+tech_notes:
+  abstraction_interface: "IQueryService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "ExecuteSqlQuery"
+    - "ExecuteSqlQueryHandler"
+  audit_events:
+    - "QueryExecuted"
+    - "SqlSafetyViolation"
+  localization_keys:
+    - "Query.SQL.Executed.Success"
+    - "Query.SQL.SafetyViolation"
+    - "Query.SQL.Timeout"
+    - "Query.SQL.ForbiddenKeyword"
+    - "Query.SQL.SchemaAccessDenied"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

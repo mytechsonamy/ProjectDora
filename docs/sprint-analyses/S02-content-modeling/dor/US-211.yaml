@@ -1,0 +1,139 @@
+# --- Required Fields ---
+story_id: "US-211"
+title: "Localization key/value pair management for content types"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.12"
+sprint: "S02"
+priority: "P2"
+
+# --- User Story Statement ---
+role: "As a TenantAdmin"
+action: "I want to create and manage localization key/value pairs at content-type or site-wide level"
+benefit: "So that the platform supports foreign language translations for UI strings and content labels"
+
+# --- Interface Contract ---
+inputs:
+  - name: "scope"
+    type: "string"
+    required: true
+    validation: "NotEmpty, OneOf('site', 'content-type')"
+    example: "content-type"
+  - name: "scopeTarget"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "DestekProgrami"
+  - name: "culture"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(10)"
+    example: "en"
+  - name: "entries"
+    type: "List<KeyValuePair>"
+    required: true
+    validation: "NotEmpty"
+    example: "[{\"key\": \"ProgramAdi\", \"value\": \"Program Name\"}, {\"key\": \"Butce\", \"value\": \"Budget\"}]"
+
+outputs:
+  - name: "savedCount"
+    type: "int"
+    description: "Number of key/value pairs saved"
+  - name: "culture"
+    type: "string"
+    description: "Culture code for which entries were saved"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentModeling.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+  data_model:
+    content_type: "LocalizationSet"
+    parts:
+      - "LocalizationPart"
+    fields:
+      - "TextField"
+  api:
+    endpoint: "PUT /api/v1/content-types/{typeName}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Localization entries saved"
+      - 400: "Validation error (empty keys, invalid culture code)"
+      - 403: "User lacks ContentModeling.Manage permission"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Create localization entries for content type"
+    given: "Content type 'DestekProgrami' exists and user has TenantAdmin role"
+    when: "Admin creates English translations: ProgramAdi='Program Name', Butce='Budget' for culture='en'"
+    then: "Localization entries saved, retrievable by content type scope and culture"
+
+  - id: "AT-002"
+    scenario: "Create site-wide localization entries"
+    given: "User has TenantAdmin role"
+    when: "Admin creates site-wide entries: SiteBaslik='Site Title', Aciklama='Description' for culture='en'"
+    then: "Site-wide entries saved, accessible from any content type or template"
+
+  - id: "AT-003"
+    scenario: "Update existing localization entry"
+    given: "Localization entry key='ProgramAdi' exists with value='Program Name' for culture='en'"
+    when: "Admin updates value to 'Support Program Name'"
+    then: "Value updated, old value replaced"
+
+  - id: "AT-004"
+    scenario: "Retrieve localization entries by culture"
+    given: "Localization entries exist for cultures 'tr', 'en', 'de'"
+    when: "Admin requests entries for culture='en'"
+    then: "Only English entries returned, not Turkish or German"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Duplicate key in same scope and culture"
+    input: "Two entries with key='ProgramAdi' for scope='DestekProgrami', culture='en'"
+    expected: "Second entry overwrites first — keys are unique per scope+culture combination"
+
+  - id: "EC-002"
+    scenario: "Key with special characters"
+    input: "key = 'Program.Adi.Label' (dots in key name)"
+    expected: "Key accepted, dots are valid in localization key names"
+
+  - id: "EC-003"
+    scenario: "Unsupported culture code"
+    input: "culture = 'xx-YY' (non-standard culture code)"
+    expected: "API returns 400 — culture must be a valid BCP 47 code"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands:
+    - "SaveLocalizationEntriesCommand"
+    - "SaveLocalizationEntriesCommandHandler"
+  mediatr_queries:
+    - "GetLocalizationEntriesQuery"
+    - "GetLocalizationEntriesQueryHandler"
+  audit_events:
+    - "LocalizationEntriesSaved"
+  localization_keys:
+    - "ContentModeling.Localization.Saved.Success"
+    - "ContentModeling.Localization.Validation.KeyRequired"
+    - "ContentModeling.Localization.Validation.CultureInvalid"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "localization:{tenantId}:{scope}:{culture}"
+    ttl: "15m"

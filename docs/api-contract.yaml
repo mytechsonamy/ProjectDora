@@ -1,0 +1,1345 @@
+openapi: 3.0.3
+info:
+  title: ProjectDora API
+  description: |
+    KOSGEB Veri Analiz ve Orkestrasyon Platformu.
+    REST API contract for all public endpoints.
+
+    **Authentication**: OpenID Connect (Bearer token)
+    **Tenant**: Determined by `X-Tenant-Id` header or host-based routing
+    **Versioning**: URL prefix `/api/v1/`
+    **Error Format**: RFC 7807 Problem Details
+  version: 1.0.0
+  contact:
+    name: ProjectDora Team
+  license:
+    name: Proprietary (KOSGEB IP)
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Development
+  - url: https://staging.projectdora.kosgeb.gov.tr/api/v1
+    description: Staging
+  - url: https://projectdora.kosgeb.gov.tr/api/v1
+    description: Production
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Content Types
+    description: Content type management (4.1.2)
+  - name: Content Items
+    description: Content CRUD, publish, versioning (4.1.3)
+  - name: Queries
+    description: Query management and execution (4.1.5)
+  - name: Users
+    description: User management (4.1.6)
+  - name: Roles
+    description: Role and permission management (4.1.6)
+  - name: Workflows
+    description: Workflow management and execution (4.1.7)
+  - name: Audit
+    description: Audit trail (4.1.9)
+  - name: Media
+    description: Media/file management (4.1.1)
+  - name: Tenants
+    description: Tenant management (4.1.10)
+
+paths:
+  # ─── Content Types (4.1.2) ───
+  /content-types:
+    get:
+      tags: [Content Types]
+      summary: List all content types
+      operationId: listContentTypes
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Paginated list of content types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResult_ContentTypeDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Content Types]
+      summary: Create a new content type
+      operationId: createContentType
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContentTypeRequest'
+      responses:
+        '201':
+          description: Content type created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentTypeDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Content type name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /content-types/{typeName}:
+    get:
+      tags: [Content Types]
+      summary: Get content type definition
+      operationId: getContentType
+      parameters:
+        - name: typeName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Content type definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentTypeDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Content Types]
+      summary: Update content type definition
+      operationId: updateContentType
+      parameters:
+        - name: typeName
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContentTypeRequest'
+      responses:
+        '200':
+          description: Content type updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentTypeDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Content Types]
+      summary: Delete content type
+      operationId: deleteContentType
+      parameters:
+        - name: typeName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: force
+          in: query
+          description: Force delete even if instances exist
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Content type deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Content type has instances (use force=true)
+
+  # ─── Content Items (4.1.3) ───
+  /content/{contentType}:
+    get:
+      tags: [Content Items]
+      summary: List content items of a type
+      operationId: listContentItems
+      parameters:
+        - name: contentType
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Draft, Published, Archived, Scheduled]
+        - name: culture
+          in: query
+          schema:
+            type: string
+            default: tr
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [createdUtc, modifiedUtc, displayText]
+            default: modifiedUtc
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Paginated content items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResult_ContentItemDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Content Items]
+      summary: Create a new content item
+      operationId: createContentItem
+      parameters:
+        - name: contentType
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContentItemRequest'
+      responses:
+        '201':
+          description: Content item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentItemDto'
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL of the created content item
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Content type not found
+
+  /content/{contentType}/{contentItemId}:
+    get:
+      tags: [Content Items]
+      summary: Get content item by ID
+      operationId: getContentItem
+      parameters:
+        - name: contentType
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: contentItemId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          description: Specific version number (latest if omitted)
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Content item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentItemDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Content Items]
+      summary: Update content item
+      operationId: updateContentItem
+      parameters:
+        - name: contentType
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: contentItemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContentItemRequest'
+      responses:
+        '200':
+          description: Content item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentItemDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Content Items]
+      summary: Delete content item (soft delete)
+      operationId: deleteContentItem
+      parameters:
+        - name: contentType
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: contentItemId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: hard
+          in: query
+          description: Hard delete (permanent)
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Content item deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /content/{contentType}/{contentItemId}/publish:
+    post:
+      tags: [Content Items]
+      summary: Publish content item
+      operationId: publishContentItem
+      parameters:
+        - name: contentType
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: contentItemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scheduledUtc:
+                  type: string
+                  format: date-time
+                  description: Schedule publish for future date (optional)
+      responses:
+        '200':
+          description: Content item published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentItemDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /content/{contentType}/{contentItemId}/unpublish:
+    post:
+      tags: [Content Items]
+      summary: Unpublish content item (revert to draft)
+      operationId: unpublishContentItem
+      parameters:
+        - name: contentType
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: contentItemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Content item unpublished
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /content/{contentType}/{contentItemId}/versions:
+    get:
+      tags: [Content Items]
+      summary: List content item versions
+      operationId: listContentItemVersions
+      parameters:
+        - name: contentType
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: contentItemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Version history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContentVersionDto'
+
+  /content/{contentType}/{contentItemId}/rollback:
+    post:
+      tags: [Content Items]
+      summary: Rollback to a specific version
+      operationId: rollbackContentItem
+      parameters:
+        - name: contentType
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: contentItemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetVersion]
+              properties:
+                targetVersion:
+                  type: integer
+      responses:
+        '200':
+          description: Rolled back (creates new version)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentItemDto'
+        '400':
+          description: Invalid version number
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ─── Queries (4.1.5) ───
+  /queries:
+    get:
+      tags: [Queries]
+      summary: List saved queries
+      operationId: listQueries
+      responses:
+        '200':
+          description: List of saved queries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedQueryDto'
+    post:
+      tags: [Queries]
+      summary: Create a saved query
+      operationId: createQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQueryRequest'
+      responses:
+        '201':
+          description: Query created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedQueryDto'
+
+  /queries/{queryId}/execute:
+    post:
+      tags: [Queries]
+      summary: Execute a saved query
+      operationId: executeQuery
+      parameters:
+        - name: queryId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '200':
+          description: Query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResultDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ─── Users (4.1.6) ───
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      operationId: listUsers
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResult_UserDto'
+    post:
+      tags: [Users]
+      summary: Create user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Email already exists
+
+  /users/{userId}:
+    get:
+      tags: [Users]
+      summary: Get user by ID
+      operationId: getUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Users]
+      summary: Update user
+      operationId: updateUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /users/{userId}/roles:
+    put:
+      tags: [Users]
+      summary: Assign roles to user
+      operationId: assignUserRoles
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roleNames]
+              properties:
+                roleNames:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Roles assigned
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ─── Roles (4.1.6) ───
+  /roles:
+    get:
+      tags: [Roles]
+      summary: List roles
+      operationId: listRoles
+      responses:
+        '200':
+          description: Role list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleDto'
+    post:
+      tags: [Roles]
+      summary: Create role
+      operationId: createRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        '201':
+          description: Role created
+
+  # ─── Workflows (4.1.7) ───
+  /workflows:
+    get:
+      tags: [Workflows]
+      summary: List workflow definitions
+      operationId: listWorkflows
+      responses:
+        '200':
+          description: Workflow list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkflowDefDto'
+    post:
+      tags: [Workflows]
+      summary: Create workflow definition
+      operationId: createWorkflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowRequest'
+      responses:
+        '201':
+          description: Workflow created
+
+  /workflows/{workflowId}/run:
+    post:
+      tags: [Workflows]
+      summary: Manually trigger a workflow
+      operationId: runWorkflow
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                context:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '202':
+          description: Workflow execution started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  executionId:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ─── Audit (4.1.9) ───
+  /audit:
+    get:
+      tags: [Audit]
+      summary: Query audit logs
+      operationId: queryAuditLogs
+      parameters:
+        - name: entityType
+          in: query
+          schema:
+            type: string
+        - name: entityId
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [Created, Updated, Published, Deleted, RolledBack, Accessed]
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResult_AuditLogDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ─── Media (4.1.1) ───
+  /media:
+    post:
+      tags: [Media]
+      summary: Upload a media file
+      operationId: uploadMedia
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                folder:
+                  type: string
+      responses:
+        '201':
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaDto'
+        '400':
+          description: Invalid file type or size exceeded
+
+  # ─── Auth ───
+  /auth/token:
+    post:
+      tags: [Users]
+      summary: Get access token (OpenID Connect token endpoint)
+      operationId: getToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, username, password]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [password, refresh_token]
+                username:
+                  type: string
+                password:
+                  type: string
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  expires_in:
+                    type: integer
+                  token_type:
+                    type: string
+        '401':
+          description: Invalid credentials
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    PageSizeParam:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+    TenantHeader:
+      name: X-Tenant-Id
+      in: header
+      schema:
+        type: string
+      description: Tenant identifier (optional if host-based routing)
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblemDetails'
+
+  schemas:
+    # ─── Common ───
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+
+    ValidationProblemDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+
+    PagedResult_ContentTypeDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentTypeDto'
+        totalCount:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    PagedResult_ContentItemDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentItemDto'
+        totalCount:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    PagedResult_UserDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserDto'
+        totalCount:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    PagedResult_AuditLogDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogDto'
+        totalCount:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    # ─── Content Types ───
+    ContentTypeDto:
+      type: object
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        stereotype:
+          type: string
+        parts:
+          type: array
+          items:
+            type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentFieldDto'
+
+    ContentFieldDto:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [TextField, NumericField, DateField, BooleanField, MediaField, ContentPickerField]
+        required:
+          type: boolean
+        settings:
+          type: object
+
+    CreateContentTypeRequest:
+      type: object
+      required: [name, displayName]
+      properties:
+        name:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9]*$'
+          maxLength: 100
+        displayName:
+          type: string
+          maxLength: 200
+        stereotype:
+          type: string
+        parts:
+          type: array
+          items:
+            type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentFieldDto'
+
+    UpdateContentTypeRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+        parts:
+          type: array
+          items:
+            type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentFieldDto'
+
+    # ─── Content Items ───
+    ContentItemDto:
+      type: object
+      properties:
+        contentItemId:
+          type: string
+        contentType:
+          type: string
+        displayText:
+          type: string
+        status:
+          type: string
+          enum: [Draft, Published, Archived, Scheduled]
+        version:
+          type: integer
+        owner:
+          type: string
+        culture:
+          type: string
+        createdUtc:
+          type: string
+          format: date-time
+        modifiedUtc:
+          type: string
+          format: date-time
+        publishedUtc:
+          type: string
+          format: date-time
+        parts:
+          type: object
+          additionalProperties: true
+        fields:
+          type: object
+          additionalProperties: true
+
+    CreateContentItemRequest:
+      type: object
+      required: [displayText]
+      properties:
+        displayText:
+          type: string
+          maxLength: 500
+        published:
+          type: boolean
+          default: false
+        culture:
+          type: string
+          default: tr
+        parts:
+          type: object
+          additionalProperties: true
+        fields:
+          type: object
+          additionalProperties: true
+
+    UpdateContentItemRequest:
+      type: object
+      properties:
+        displayText:
+          type: string
+          maxLength: 500
+        parts:
+          type: object
+          additionalProperties: true
+        fields:
+          type: object
+          additionalProperties: true
+
+    ContentVersionDto:
+      type: object
+      properties:
+        versionNumber:
+          type: integer
+        createdUtc:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        data:
+          type: object
+
+    # ─── Queries ───
+    SavedQueryDto:
+      type: object
+      properties:
+        queryId:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [Lucene, Elasticsearch, SQL]
+        queryText:
+          type: string
+        parameters:
+          type: object
+        isApiExposed:
+          type: boolean
+
+    CreateQueryRequest:
+      type: object
+      required: [name, type, queryText]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [Lucene, Elasticsearch, SQL]
+        queryText:
+          type: string
+        parameters:
+          type: object
+        isApiExposed:
+          type: boolean
+          default: false
+
+    QueryResultDto:
+      type: object
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: object
+        totalCount:
+          type: integer
+        executionTimeMs:
+          type: integer
+
+    # ─── Users ───
+    UserDto:
+      type: object
+      properties:
+        userId:
+          type: string
+        userName:
+          type: string
+        email:
+          type: string
+        enabled:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+        createdUtc:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required: [userName, email, password]
+      properties:
+        userName:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        roles:
+          type: array
+          items:
+            type: string
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        enabled:
+          type: boolean
+
+    # ─── Roles ───
+    RoleDto:
+      type: object
+      properties:
+        roleId:
+          type: string
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+
+    CreateRoleRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+
+    # ─── Workflows ───
+    WorkflowDefDto:
+      type: object
+      properties:
+        workflowId:
+          type: string
+        name:
+          type: string
+        displayName:
+          type: string
+        isEnabled:
+          type: boolean
+        activities:
+          type: array
+          items:
+            type: object
+        transitions:
+          type: array
+          items:
+            type: object
+
+    CreateWorkflowRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        isEnabled:
+          type: boolean
+          default: true
+        startActivity:
+          type: object
+        activities:
+          type: array
+          items:
+            type: object
+        transitions:
+          type: array
+          items:
+            type: object
+
+    # ─── Audit ───
+    AuditLogDto:
+      type: object
+      properties:
+        auditId:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+        action:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        diff:
+          type: object
+
+    # ─── Media ───
+    MediaDto:
+      type: object
+      properties:
+        mediaId:
+          type: string
+        fileName:
+          type: string
+        mimeType:
+          type: string
+        size:
+          type: integer
+        url:
+          type: string
+        folder:
+          type: string
+        createdUtc:
+          type: string
+          format: date-time

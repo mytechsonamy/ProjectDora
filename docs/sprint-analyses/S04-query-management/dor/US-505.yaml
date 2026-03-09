@@ -1,0 +1,139 @@
+# US-505: Elasticsearch Integration for Centralized Indexing
+# Spec: 4.1.5.3 — Elasticsearch centralized index hosting
+
+story_id: "US-505"
+title: "Integrate Elasticsearch for centralized search indexing"
+module: "ProjectDora.Modules.QueryEngine"
+spec_refs:
+  - "4.1.5.3"
+sprint: "S04"
+priority: "P2"
+
+role: "As a SuperAdmin"
+action: "I want to configure Elasticsearch as the centralized search engine for distributed deployments"
+benefit: "So that multiple instances can share a unified search index for cross-instance content discovery"
+
+inputs:
+  - name: "elasticsearchUrl"
+    type: "string"
+    required: true
+    validation: "NotEmpty, Must(BeValidUrl)"
+    example: "https://es.projectdora.kosgeb.gov.tr:9200"
+  - name: "indexPrefix"
+    type: "string"
+    required: false
+    validation: "MaxLength(50), Matches('^[a-z][a-z0-9_-]*$')"
+    example: "projectdora"
+  - name: "queryJson"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(50000), Must(BeValidJson)"
+    example: '{"query":{"bool":{"must":[{"match":{"displayText":"KOBİ destek"}}],"filter":[{"term":{"status":"Published"}}]}}}'
+  - name: "pageSize"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 100)"
+    example: 20
+  - name: "page"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 10000)"
+    example: 1
+
+outputs:
+  - name: "items"
+    type: "PagedResult<ContentItemDto>"
+    description: "Matching content items from Elasticsearch"
+  - name: "totalCount"
+    type: "int"
+    description: "Total matching results"
+  - name: "executionTimeMs"
+    type: "int"
+    description: "ES query execution time"
+  - name: "clusterHealth"
+    type: "string"
+    description: "ES cluster health: green, yellow, red"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "QueryEngine.Execute"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+  data_model:
+    content_type: "N/A"
+    parts: []
+    fields: []
+  api:
+    endpoint: "GET /api/v1/queries/elasticsearch"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Query executed against Elasticsearch"
+      - 400: "Invalid query JSON or syntax"
+      - 403: "User lacks QueryEngine.Execute permission"
+      - 503: "Elasticsearch cluster unavailable — fallback to Lucene if configured"
+
+acceptance_tests:
+  - id: "AT-505-001"
+    scenario: "Execute Elasticsearch query with Turkish analyzer"
+    given: "Elasticsearch cluster is running, index 'projectdora_content' has Turkish-analyzed content"
+    when: "User submits an ES query for 'destek programı'"
+    then: "System returns matching results with Turkish stemming applied"
+  - id: "AT-505-002"
+    scenario: "Automatic fallback to Lucene when ES is down"
+    given: "Elasticsearch cluster is unreachable"
+    when: "User submits a search query"
+    then: "System falls back to Lucene.NET, returns results with a warning header X-Search-Fallback: Lucene"
+  - id: "AT-505-003"
+    scenario: "Tenant-isolated Elasticsearch results"
+    given: "Tenant-A and Tenant-B both have content indexed in ES"
+    when: "Tenant-A user executes a search"
+    then: "Only Tenant-A content is returned — ES query has tenantId filter injected"
+  - id: "AT-505-004"
+    scenario: "Multi-field search with Turkish boosting"
+    given: "Content items with 'teknoloji' in displayText and body"
+    when: "User searches with multi_match on displayText^3 and body"
+    then: "Items with 'teknoloji' in displayText are ranked higher"
+
+edge_cases:
+  - id: "EC-505-001"
+    scenario: "Elasticsearch deep pagination beyond 10,000"
+    input: "page=501, pageSize=100 (offset=50,000)"
+    expected: "System returns 400 with message to use narrower filters — ES from > 10000 not allowed"
+  - id: "EC-505-002"
+    scenario: "Elasticsearch index does not exist"
+    input: "Query targets index 'projectdora_nonexistent'"
+    expected: "System returns 404 with descriptive error about missing index"
+  - id: "EC-505-003"
+    scenario: "Malformed Elasticsearch query JSON"
+    input: "queryJson = '{ invalid json'"
+    expected: "API returns 400 with JSON parse error details"
+
+dependencies:
+  stories: ["US-501", "US-504"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.QueryEngine"]
+  external: ["Elasticsearch 8.x cluster"]
+
+tech_notes:
+  abstraction_interface: "IQueryService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "ExecuteElasticsearchQuery"
+    - "ExecuteElasticsearchQueryHandler"
+    - "GetElasticsearchHealthQuery"
+    - "GetElasticsearchHealthQueryHandler"
+  audit_events:
+    - "QueryExecuted"
+    - "SearchFallbackActivated"
+  localization_keys:
+    - "Query.ES.Executed.Success"
+    - "Query.ES.Unavailable.Fallback"
+    - "Query.ES.InvalidQueryJson"
+    - "Query.ES.DeepPaginationNotAllowed"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "query:es:{tenantId}:{queryHash}"
+    ttl: "5m"

@@ -1,0 +1,124 @@
+# US-806: Admin Panel UI Localization
+# Spec: 4.1.8.1, 4.1.2.12 — Admin panel UI strings localized in Turkish (default) and extensible to other languages
+
+story_id: "US-806"
+title: "Admin panel UI displayed in the user's preferred language using IStringLocalizer and PO files"
+module: "ProjectDora.Modules.Localization"
+spec_refs:
+  - "4.1.8.1"
+  - "4.1.2.12"
+sprint: "S07"
+priority: "P2"
+
+role: "As an Editor"
+action: "I want the admin panel interface (menus, buttons, labels, messages) to be displayed in Turkish by default with the ability to switch to English or other activated languages"
+benefit: "So that KOSGEB staff who prefer Turkish have a fully localized admin experience, and international users or trainees can optionally use the English interface"
+
+inputs:
+  - name: "uiCulture"
+    type: "string"
+    required: false
+    validation: "MustBeActivatedCulture"
+    example: "tr"
+  - name: "cookieValue"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "c=en|uic=en"
+
+outputs:
+  - name: "renderedAdminPage"
+    type: "HTML"
+    description: "Admin panel page rendered with all UI strings in the selected culture language"
+  - name: "activeUiCulture"
+    type: "string"
+    description: "The culture used for rendering (resolved from cookie, URL, or default)"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Localization.ViewTranslations"
+    denied_roles:
+      - "Anonymous"
+  data_model:
+    content_type: "N/A (UI rendering — no content type)"
+    parts: []
+    fields: []
+  api:
+    endpoint: "GET /admin (admin panel Razor pages — not a REST endpoint)"
+    request_content_type: "text/html"
+    response_codes:
+      - 200: "Admin panel rendered in the selected culture"
+      - 302: "Redirect to culture-appropriate URL if required"
+      - 403: "User not authenticated or lacks admin access"
+
+acceptance_tests:
+  - id: "AT-806-001"
+    scenario: "Admin panel renders fully in Turkish by default"
+    given: "User is authenticated and has Editor role, no culture preference cookie set"
+    when: "User navigates to /admin/contents"
+    then: "All UI labels render in Turkish: 'Icerikler', 'Yeni Olustur', 'Yayinla', 'Duzenle', 'Sil', etc. via IStringLocalizer"
+  - id: "AT-806-002"
+    scenario: "Admin panel switches to English when English culture is selected"
+    given: "English ('en') is activated and TenantAdmin has set UI culture to 'en'"
+    when: "User navigates to /admin/contents with culture=en cookie"
+    then: "All UI labels render in English: 'Contents', 'Create New', 'Publish', 'Edit', 'Delete', etc."
+  - id: "AT-806-003"
+    scenario: "Admin panel language switcher updates cookie and re-renders in selected language"
+    given: "User is on /admin with Turkish active"
+    when: "User clicks 'English' in the admin panel language switcher"
+    then: "Cookie updated to 'c=en|uic=en', admin panel re-renders in English, no page content is lost"
+  - id: "AT-806-004"
+    scenario: "Module-level localization keys are resolved correctly"
+    given: "Turkish PO file for ProjectDora.Modules.Localization contains 'Localization.Menu.Title' = 'Coklu Dil Yonetimi'"
+    when: "Admin panel renders the Localization module menu entry"
+    then: "Menu shows 'Coklu Dil Yonetimi' in Turkish admin panel"
+
+edge_cases:
+  - id: "EC-806-001"
+    scenario: "Untranslated UI string in English PO file"
+    input: "Admin panel renders a new module's UI string not yet in the English PO file"
+    expected: "Untranslated string's msgid (English key) displayed as-is — no exception, no blank label"
+  - id: "EC-806-002"
+    scenario: "Admin panel culture differs from content culture"
+    input: "Admin panel UI culture = 'en'; Editor is editing a Turkish content item"
+    expected: "Admin UI chrome (menus, buttons) renders in English; the Turkish content text fields remain in Turkish — content culture and UI culture are independent"
+  - id: "EC-806-003"
+    scenario: "UI culture set to a non-activated language via cookie manipulation"
+    input: "Cookie: .AspNetCore.Culture = 'c=de|uic=de' (German not activated)"
+    expected: "System falls back to default culture (Turkish); admin panel renders in Turkish; no error thrown"
+
+dependencies:
+  stories: ["US-801", "US-805"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Localization"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "ILocalizationService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "GetAdminUiCultureQuery"
+    - "GetAdminUiCultureQueryHandler"
+  audit_events: []
+  localization_keys:
+    - "Admin.Menu.Contents"
+    - "Admin.Menu.Localization"
+    - "Admin.Menu.Settings"
+    - "Admin.Button.Create"
+    - "Admin.Button.Edit"
+    - "Admin.Button.Delete"
+    - "Admin.Button.Publish"
+    - "Admin.Button.Unpublish"
+    - "Admin.Button.Save"
+    - "Admin.Button.Cancel"
+    - "Admin.Label.Status"
+    - "Admin.Label.CreatedDate"
+    - "Admin.Label.ModifiedDate"
+    - "Admin.Label.Author"
+    - "Localization.Menu.Title"
+    - "Localization.CultureList.Title"
+    - "Localization.PO.Upload.Label"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

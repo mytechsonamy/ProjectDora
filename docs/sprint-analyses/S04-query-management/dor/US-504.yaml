@@ -1,0 +1,126 @@
+# US-504: Search Index Rebuild Capability
+# Spec: 4.1.5.2 — Rebuildable indexes
+
+story_id: "US-504"
+title: "Rebuild search indexes from admin panel"
+module: "ProjectDora.Modules.QueryEngine"
+spec_refs:
+  - "4.1.5.2"
+sprint: "S04"
+priority: "P2"
+
+role: "As a TenantAdmin"
+action: "I want to rebuild search indexes for specific content types or all content"
+benefit: "So that I can fix index corruption, apply new analyzer settings, or resync after data migration"
+
+inputs:
+  - name: "contentType"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "Duyuru"
+  - name: "indexName"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "content_duyuru"
+  - name: "rebuildAll"
+    type: "bool"
+    required: false
+    validation: ""
+    example: false
+
+outputs:
+  - name: "taskId"
+    type: "string"
+    description: "Background task identifier for tracking rebuild progress"
+  - name: "status"
+    type: "string"
+    description: "Task status: Queued, Running, Completed, Failed"
+  - name: "recordCount"
+    type: "int"
+    description: "Number of records reindexed"
+  - name: "durationMs"
+    type: "int"
+    description: "Total reindex duration in milliseconds"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "QueryEngine.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "SearchIndex"
+    parts: []
+    fields:
+      - "indexName"
+      - "contentType"
+      - "recordCount"
+      - "lastIndexedUtc"
+  api:
+    endpoint: "POST /api/v1/search/reindex"
+    request_content_type: "application/json"
+    response_codes:
+      - 202: "Reindex task accepted and queued"
+      - 400: "Invalid content type or index name"
+      - 403: "User lacks QueryEngine.Manage permission"
+      - 409: "Reindex already in progress for this index"
+
+acceptance_tests:
+  - id: "AT-504-001"
+    scenario: "Rebuild index for specific content type"
+    given: "Content type 'Duyuru' has 100 items and a Lucene index"
+    when: "Admin triggers reindex for contentType='Duyuru'"
+    then: "Reindex task is queued, returns taskId, index rebuilt with all 100 items"
+  - id: "AT-504-002"
+    scenario: "Rebuild all indexes"
+    given: "3 content types with Lucene indexes exist"
+    when: "Admin triggers rebuildAll=true"
+    then: "All 3 indexes are rebuilt sequentially, status trackable via taskId"
+  - id: "AT-504-003"
+    scenario: "Get index status"
+    given: "Lucene index 'content_duyuru' exists with 50 records"
+    when: "Admin queries index status"
+    then: "Returns indexName, recordCount=50, lastIndexedUtc timestamp"
+
+edge_cases:
+  - id: "EC-504-001"
+    scenario: "Concurrent reindex requests for same index"
+    input: "Two simultaneous reindex requests for 'content_duyuru'"
+    expected: "Second request returns 409 Conflict — reindex already in progress"
+  - id: "EC-504-002"
+    scenario: "Reindex with zero content items"
+    input: "Content type 'BosIcerik' has 0 items"
+    expected: "Reindex completes successfully with recordCount=0, empty index created"
+
+dependencies:
+  stories: ["US-501", "US-502"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.QueryEngine"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IQueryService"
+  mediatr_commands:
+    - "ReindexCommand"
+    - "ReindexCommandHandler"
+  mediatr_queries:
+    - "GetSearchIndexStatusQuery"
+    - "GetSearchIndexStatusQueryHandler"
+  audit_events:
+    - "SearchIndexRebuildStarted"
+    - "SearchIndexRebuildCompleted"
+    - "SearchIndexRebuildFailed"
+  localization_keys:
+    - "Search.Reindex.Started"
+    - "Search.Reindex.Completed"
+    - "Search.Reindex.Failed"
+    - "Search.Reindex.AlreadyRunning"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

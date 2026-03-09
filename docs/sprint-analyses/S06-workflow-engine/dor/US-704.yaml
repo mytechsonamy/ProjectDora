@@ -1,0 +1,147 @@
+# US-704: Pre-defined Trigger/Event Activities
+# Spec: 4.1.7.3 - Urunun ilgili is akisinin calismasini / tetiklenmesini saglamak amaciyla
+#       on tanimli cesitli etkinlik / olay aktivitelerini (zaman bazli, icerik hareketleri
+#       kaynakli, http hareketleri kaynakli, vb.) yapilandirmaya hazir olarak sunmasi
+
+story_id: "US-704"
+title: "Pre-defined trigger and event activities"
+module: "ProjectDora.Modules.Workflows"
+spec_refs:
+  - "4.1.7.3"
+sprint: "S06"
+priority: "P0"
+
+role: "As a WorkflowAdmin"
+action: "I want to configure pre-defined trigger events (content events, timer, HTTP, signal) as workflow start points"
+benefit: "So that workflows are automatically triggered when specific events occur in the system"
+
+inputs:
+  - name: "triggerType"
+    type: "string"
+    required: true
+    validation: "NotEmpty, OneOf('ContentCreatedEvent', 'ContentPublishedEvent', 'ContentUpdatedEvent', 'ContentDeletedEvent', 'UserCreatedEvent', 'TimerEvent', 'HttpRequestEvent', 'SignalEvent')"
+    example: "ContentPublishedEvent"
+  - name: "properties"
+    type: "object"
+    required: false
+    validation: ""
+    example: '{"ContentTypes": ["Duyuru", "DestekProgrami"]}'
+  - name: "cronExpression"
+    type: "string"
+    required: false
+    validation: "ValidCronExpression (when triggerType=TimerEvent)"
+    example: "0 9 * * 1"
+  - name: "httpMethod"
+    type: "string"
+    required: false
+    validation: "OneOf('GET', 'POST', 'PUT', 'DELETE') (when triggerType=HttpRequestEvent)"
+    example: "POST"
+  - name: "signalName"
+    type: "string"
+    required: false
+    validation: "NotEmpty (when triggerType=SignalEvent), MaxLength(200)"
+    example: "BasvuruOnaylandi"
+
+outputs:
+  - name: "activityId"
+    type: "string"
+    description: "Unique ID of the trigger activity in the workflow"
+  - name: "triggerType"
+    type: "string"
+    description: "Type of trigger event"
+  - name: "isConfigured"
+    type: "bool"
+    description: "Whether trigger properties are fully configured"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Workflow.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+  data_model:
+    content_type: "WorkflowDef"
+    parts:
+      - "WorkflowDefPart"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/workflows/{workflowId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Trigger activity configured"
+      - 400: "Invalid trigger configuration (bad cron, missing ContentTypes)"
+      - 403: "User lacks Workflow.Manage permission"
+
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "ContentPublishedEvent trigger fires on publish"
+    given: "Enabled workflow has ContentPublishedEvent trigger filtered for 'Duyuru' content type"
+    when: "An Editor publishes a 'Duyuru' content item"
+    then: "Workflow execution starts, trigger passes ContentItem data to workflow context"
+  - id: "AT-002"
+    scenario: "ContentCreatedEvent trigger fires on creation"
+    given: "Enabled workflow has ContentCreatedEvent trigger filtered for 'DestekProgrami'"
+    when: "An Editor creates a new 'DestekProgrami' content item"
+    then: "Workflow execution starts with new content item in context"
+  - id: "AT-003"
+    scenario: "TimerEvent trigger fires on cron schedule"
+    given: "Enabled workflow has TimerEvent trigger with cron '0 9 * * 1' (Monday 9AM)"
+    when: "System clock reaches Monday 09:00"
+    then: "Workflow execution starts, timer context includes scheduled time"
+  - id: "AT-004"
+    scenario: "HttpRequestEvent trigger fires on HTTP call"
+    given: "Enabled workflow has HttpRequestEvent trigger for POST /workflows/hooks/basvuru-bildirim"
+    when: "External system sends POST to the webhook URL"
+    then: "Workflow execution starts, HTTP request body passed as workflow context"
+  - id: "AT-005"
+    scenario: "SignalEvent trigger fires on programmatic signal"
+    given: "Enabled workflow has SignalEvent trigger with signalName='BasvuruOnaylandi'"
+    when: "Application code calls IWorkflowService.TriggerAsync with signal 'BasvuruOnaylandi'"
+    then: "Workflow execution starts with signal context data"
+  - id: "AT-006"
+    scenario: "Content trigger filtered by type does not fire for other types"
+    given: "Workflow has ContentPublishedEvent trigger filtered for 'Duyuru' only"
+    when: "A 'DestekProgrami' content item is published"
+    then: "Workflow does NOT trigger"
+
+edge_cases:
+  - id: "EC-001"
+    scenario: "Invalid cron expression for TimerEvent"
+    input: "cronExpression = 'invalid-cron-string'"
+    expected: "API returns 400: invalid cron expression format"
+  - id: "EC-002"
+    scenario: "Multiple workflows triggered by same event"
+    input: "Two enabled workflows both have ContentPublishedEvent trigger for 'Duyuru'"
+    expected: "Both workflows trigger independently, each with its own execution instance"
+  - id: "EC-003"
+    scenario: "Trigger event when workflow is disabled"
+    input: "ContentPublishedEvent fires but workflow isEnabled=false"
+    expected: "No workflow execution created, event silently ignored for this workflow"
+
+dependencies:
+  stories: ["US-701", "US-702"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Workflows"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IWorkflowService"
+  mediatr_commands: []
+  mediatr_queries: []
+  audit_events:
+    - "WorkflowTriggered"
+  localization_keys:
+    - "Workflow.Trigger.ContentCreated"
+    - "Workflow.Trigger.ContentPublished"
+    - "Workflow.Trigger.ContentUpdated"
+    - "Workflow.Trigger.ContentDeleted"
+    - "Workflow.Trigger.Timer"
+    - "Workflow.Trigger.HttpRequest"
+    - "Workflow.Trigger.Signal"
+    - "Workflow.Validation.InvalidCron"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

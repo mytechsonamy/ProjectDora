@@ -1,0 +1,133 @@
+# --- Required Fields ---
+story_id: "US-101"
+title: "Admin panel authenticated access"
+module: "ProjectDora.Modules.AdminPanel"
+spec_refs:
+  - "4.1.1.1"
+sprint: "S01"
+priority: "P0"
+
+# --- User Story Statement ---
+role: "As a SuperAdmin"
+action: "I want the admin panel to be accessible only by authenticated users"
+benefit: "So that unauthorized users cannot access administrative functions"
+
+# --- Interface Contract ---
+inputs:
+  - name: "username"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(256)"
+    example: "admin@kosgeb.gov.tr"
+  - name: "password"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MinLength(8)"
+    example: "********"
+
+outputs:
+  - name: "accessToken"
+    type: "string"
+    description: "JWT access token for authenticated admin sessions"
+  - name: "refreshToken"
+    type: "string"
+    description: "Refresh token for session renewal"
+  - name: "expiresIn"
+    type: "int"
+    description: "Token expiry in seconds"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "AccessAdminPanel"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+  data_model:
+    content_type: "N/A"
+    parts: []
+    fields: []
+  api:
+    endpoint: "POST /api/v1/auth/token"
+    request_content_type: "application/x-www-form-urlencoded"
+    response_codes:
+      - 200: "Token issued successfully"
+      - 401: "Invalid credentials"
+      - 403: "User lacks AccessAdminPanel permission"
+      - 423: "Account locked after failed attempts"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Successful admin login"
+    given: "User 'admin@kosgeb.gov.tr' exists with SuperAdmin role and AccessAdminPanel permission"
+    when: "User submits valid credentials to /api/v1/auth/token"
+    then: "System returns 200 with access_token, refresh_token, and expires_in"
+
+  - id: "AT-002"
+    scenario: "Reject unauthenticated admin access"
+    given: "No authentication token is provided"
+    when: "User navigates to /admin"
+    then: "System redirects to login page (302) or returns 401 Unauthorized for API calls"
+
+  - id: "AT-003"
+    scenario: "Reject invalid credentials"
+    given: "User 'admin@kosgeb.gov.tr' exists but wrong password is provided"
+    when: "User submits invalid credentials to /api/v1/auth/token"
+    then: "System returns 401 Unauthorized with RFC 7807 ProblemDetails"
+
+  - id: "AT-004"
+    scenario: "Deny admin access for Viewer role"
+    given: "User has Viewer role without AccessAdminPanel permission"
+    when: "User authenticates and tries to access /admin"
+    then: "System returns 403 Forbidden"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Expired JWT token used for admin access"
+    input: "Valid but expired access_token in Authorization header"
+    expected: "System returns 401 with 'token_expired' error, client must use refresh_token"
+
+  - id: "EC-002"
+    scenario: "Turkish characters in username"
+    input: "username = 'mustafa.yildirim@kosgeb.gov.tr' (with dotless i)"
+    expected: "Authentication succeeds, Turkish locale-aware comparison used for username lookup"
+
+  - id: "EC-003"
+    scenario: "Concurrent login from multiple devices"
+    input: "Same user authenticates from two different browsers simultaneously"
+    expected: "Both sessions are valid, each gets its own access_token"
+
+# --- Dependencies ---
+dependencies:
+  stories: []
+  modules:
+    - "ProjectDora.Core"
+    - "OrchardCore.OpenId"
+    - "OrchardCore.Admin"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IAuthService"
+  mediatr_commands:
+    - "AuthenticateUserCommand"
+    - "AuthenticateUserCommandHandler"
+  mediatr_queries:
+    - "GetCurrentUserQuery"
+    - "GetCurrentUserQueryHandler"
+  audit_events:
+    - "UserLoggedIn"
+    - "UserLoginFailed"
+    - "UserAccessDenied"
+  localization_keys:
+    - "Auth.Login.Success"
+    - "Auth.Login.InvalidCredentials"
+    - "Auth.Login.AccountLocked"
+    - "Auth.AccessDenied.NoPermission"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

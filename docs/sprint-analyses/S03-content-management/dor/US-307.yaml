@@ -1,0 +1,119 @@
+# --- Required Fields ---
+story_id: "US-307"
+title: "Per-language URL paths (localized slugs)"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.3.8"
+sprint: "S03"
+priority: "P2"
+
+# --- User Story Statement ---
+role: "As an SEOUzmani"
+action: "I want each language variant of a content item to have its own URL path in the respective language"
+benefit: "So that search engines index each language version with appropriate localized URLs for better international SEO"
+
+# --- Interface Contract ---
+inputs:
+  - name: "contentItemId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "en-variant-xyz"
+  - name: "culture"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(10)"
+    example: "en"
+  - name: "localizedPath"
+    type: "string"
+    required: false
+    validation: "MaxLength(500), Matches('^[a-z0-9-/]+$')"
+    example: "support-programs/sme-technology-support"
+
+outputs:
+  - name: "cultureUrlMap"
+    type: "Dictionary<string, string>"
+    description: "Map of culture codes to their URL paths for this content's localization set"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentManagement.EditOwn"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "dynamic"
+    parts:
+      - "AutoroutePart"
+      - "LocalizationPart"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/content/{contentType}/{contentItemId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Localized URL path updated"
+      - 400: "Invalid path format"
+      - 409: "Path already taken"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Turkish and English variants have different URL paths"
+    given: "Turkish content at path 'destek-programlari/kobi-destegi' and English translation created"
+    when: "English translation is saved with displayText='SME Support'"
+    then: "English variant gets path 'support-programs/sme-support', Turkish keeps 'destek-programlari/kobi-destegi'"
+
+  - id: "AT-002"
+    scenario: "Custom localized path for specific language"
+    given: "Turkish content item and its English translation exist"
+    when: "User sets localizedPath='grants/sme-tech-2026' for the English variant"
+    then: "English variant accessible at /grants/sme-tech-2026, Turkish variant path unchanged"
+
+  - id: "AT-003"
+    scenario: "Auto-generated slug respects content culture"
+    given: "German translation created with displayText='KMU Technologie Förderung'"
+    when: "Content is saved"
+    then: "Slug generated as 'kmu-technologie-forderung' (German umlauts handled)"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Same slug in different cultures"
+    input: "Turkish and English variants both generate slug 'destek' (unlikely but possible)"
+    expected: "Both paths are valid since they belong to different content items; no conflict"
+
+  - id: "EC-002"
+    scenario: "Localized URL collision across different content items"
+    input: "English variant A has path 'support/sme', English variant B (different content) also tries path 'support/sme'"
+    expected: "Second item gets 'support/sme-2' — duplicate resolution applies within same culture scope"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-304", "US-306"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentService"
+  mediatr_commands:
+    - "UpdateLocalizedUrlCommand"
+    - "UpdateLocalizedUrlCommandHandler"
+  mediatr_queries:
+    - "GetCultureUrlMapQuery"
+    - "GetCultureUrlMapQueryHandler"
+  audit_events:
+    - "ContentItemLocalizedUrlChanged"
+  localization_keys:
+    - "Content.LocalizedUrl.Updated"
+    - "Content.LocalizedUrl.Conflict"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "route:{tenantId}:{culture}:{path}"
+    ttl: "30m"

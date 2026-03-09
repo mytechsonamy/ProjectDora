@@ -1,0 +1,150 @@
+# US-805: PO File Management for UI String Localization
+# Spec: 4.1.2.12 — Key/value pairs for foreign language support, manageable per content type or site-wide
+
+story_id: "US-805"
+title: "Upload, edit, and manage PO translation files for UI string localization"
+module: "ProjectDora.Modules.Localization"
+spec_refs:
+  - "4.1.2.12"
+sprint: "S07"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want to upload, edit, and manage GNU gettext PO files for each activated language through the admin panel"
+benefit: "So that all UI strings in the admin panel and front-end (buttons, labels, error messages, menu items) are correctly translated into Turkish, English, and any other activated language without requiring developer involvement"
+
+inputs:
+  - name: "culture"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MustBeActivatedCulture"
+    example: "en"
+  - name: "poFileContent"
+    type: "string (PO file body)"
+    required: true
+    validation: "NotEmpty, MaxLength(10485760), ValidPoFormat"
+    example: |
+      msgid "ContentType.DestekProgrami.DisplayName"
+      msgstr "Support Program"
+  - name: "contentType"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "DestekProgrami"
+
+outputs:
+  - name: "culture"
+    type: "string"
+    description: "Culture the PO file was updated for"
+  - name: "entryCount"
+    type: "int"
+    description: "Number of msgid/msgstr entries in the uploaded file"
+  - name: "storagePath"
+    type: "string"
+    description: "Server-side storage path of the PO file (for reference)"
+  - name: "updatedUtc"
+    type: "DateTime"
+    description: "Timestamp of the PO file update"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Localization.ManagePOFiles"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "POTranslationEntry"
+    parts:
+      - "SiteSettings (YesSql) for PO metadata"
+    fields:
+      - "Culture (string)"
+      - "ContentType (string, optional scope)"
+      - "MsgId (string)"
+      - "MsgStr (string)"
+      - "PluralForms (string[])"
+  api:
+    endpoint: "PUT /api/v1/localization/po/{culture}"
+    request_content_type: "text/plain (PO file body)"
+    response_codes:
+      - 200: "PO file uploaded and parsed successfully"
+      - 400: "Invalid PO file format or validation error"
+      - 403: "User lacks Localization.ManagePOFiles permission"
+      - 404: "Culture not activated for this tenant"
+
+acceptance_tests:
+  - id: "AT-805-001"
+    scenario: "Upload a valid English PO file"
+    given: "English ('en') is activated and user has TenantAdmin role"
+    when: "TenantAdmin uploads an English PO file with 50 msgid/msgstr entries"
+    then: "PO file stored at App_Data/Localization/{tenantName}/en.po, entryCount=50 returned, IStringLocalizer immediately reflects the new translations"
+  - id: "AT-805-002"
+    scenario: "IStringLocalizer returns translated string from PO file"
+    given: "Turkish PO file contains: msgid 'ContentList.NoResults' msgstr 'Sonuc bulunamadi'"
+    when: "Admin panel renders with culture='tr'"
+    then: "UI displays 'Sonuc bulunamadi' in place of the default key"
+  - id: "AT-805-003"
+    scenario: "Fallback to default string when PO entry is missing"
+    given: "English PO file does not contain an entry for 'ContentList.NoResults'"
+    when: "Admin panel renders with culture='en'"
+    then: "UI displays the msgid string 'ContentList.NoResults' as fallback — no exception thrown"
+  - id: "AT-805-004"
+    scenario: "Download PO file for a culture"
+    given: "Turkish PO file exists with 120 entries"
+    when: "TenantAdmin calls GET /api/v1/localization/po/tr"
+    then: "Response returns the PO file as text/plain with Content-Disposition: attachment; filename='tr.po'"
+  - id: "AT-805-005"
+    scenario: "Turkish plural forms handled correctly"
+    given: "Turkish PO file entry: msgid 'Items.Count' msgid_plural 'Items.Count.Plural' msgstr[0] '{0} oge' msgstr[1] '{0} oge'"
+    when: "UI renders with count=1 and count=5"
+    then: "Turkish renders '{0} oge' for both (Turkish has simple plural rules: same form for all counts)"
+
+edge_cases:
+  - id: "EC-805-001"
+    scenario: "Invalid PO file format"
+    input: "poFileContent = 'This is not a valid PO file; missing msgid/msgstr structure'"
+    expected: "API returns 400 Bad Request — 'Gecersiz PO dosyasi formati. Satir 1: beklenen msgid ya da yorum'"
+  - id: "EC-805-002"
+    scenario: "PO file with Turkish characters in msgstr"
+    input: "msgstr = 'Küçük ve Orta Ölçekli İşletme Destek Programı'"
+    expected: "Turkish characters (İ, Ö, Ü, Ş, Ç, Ğ, ı) preserved correctly in storage and rendering"
+  - id: "EC-805-003"
+    scenario: "PO file exceeds maximum size"
+    input: "poFileContent = file larger than 10 MB"
+    expected: "API returns 400 Bad Request — 'PO dosyasi boyutu siniri asiliyor (max 10 MB)'"
+
+dependencies:
+  stories: ["US-801"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Localization"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "ILocalizationService"
+  mediatr_commands:
+    - "UploadPoFileCommand"
+    - "UploadPoFileCommandHandler"
+    - "UpdatePoEntryCommand"
+    - "UpdatePoEntryCommandHandler"
+  mediatr_queries:
+    - "GetPoFileQuery"
+    - "GetPoFileQueryHandler"
+    - "ListPoEntriesQuery"
+    - "ListPoEntriesQueryHandler"
+  audit_events:
+    - "PoFileUploaded"
+    - "PoEntryUpdated"
+  localization_keys:
+    - "PO.Uploaded.Success"
+    - "PO.Downloaded.Success"
+    - "PO.Validation.InvalidFormat"
+    - "PO.Validation.FileTooLarge"
+    - "PO.Validation.CultureNotActivated"
+    - "PO.Entry.Missing.Fallback"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

@@ -1,0 +1,132 @@
+# US-501: Lucene Full-Text Search with Turkish Analyzer
+# Spec: 4.1.5.1 — Apache Lucene full-text search on content records
+
+story_id: "US-501"
+title: "Execute Lucene full-text search with Turkish language support"
+module: "ProjectDora.Modules.QueryEngine"
+spec_refs:
+  - "4.1.5.1"
+sprint: "S04"
+priority: "P1"
+
+role: "As an Analyst"
+action: "I want to execute full-text search queries with Turkish language support"
+benefit: "So that I can find content items quickly using keyword search with correct Turkish stemming"
+
+inputs:
+  - name: "queryText"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(1000)"
+    example: "KOBİ destek programı"
+  - name: "indexName"
+    type: "string"
+    required: false
+    validation: "MaxLength(100), Matches('^[a-z][a-z0-9_]*$')"
+    example: "content_duyuru"
+  - name: "contentType"
+    type: "string"
+    required: false
+    validation: "MaxLength(100)"
+    example: "Duyuru"
+  - name: "pageSize"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 100)"
+    example: 20
+  - name: "page"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 10000)"
+    example: 1
+
+outputs:
+  - name: "items"
+    type: "PagedResult<ContentItemDto>"
+    description: "Matching content items with relevance score"
+  - name: "totalCount"
+    type: "int"
+    description: "Total number of matching results"
+  - name: "executionTimeMs"
+    type: "int"
+    description: "Query execution time in milliseconds"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "QueryEngine.Execute"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+  data_model:
+    content_type: "N/A"
+    parts: []
+    fields: []
+  api:
+    endpoint: "GET /api/v1/queries/lucene"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Query executed successfully"
+      - 400: "Invalid query syntax"
+      - 403: "User lacks QueryEngine.Execute permission"
+      - 408: "Query timeout exceeded"
+
+acceptance_tests:
+  - id: "AT-501-001"
+    scenario: "Simple keyword search returns matching results"
+    given: "Content items exist with Turkish text and user has Analyst role"
+    when: "User submits Lucene query 'destek'"
+    then: "System returns matching content items ordered by relevance score"
+  - id: "AT-501-002"
+    scenario: "Turkish stemming finds word variants"
+    given: "Content items with words 'destekler', 'destekleri', 'destek' exist"
+    when: "User searches for 'destek'"
+    then: "All variants are found via Turkish stemming — 'destekler', 'destekleri', 'destek' all match"
+  - id: "AT-501-003"
+    scenario: "Reject query without permission"
+    given: "User has Viewer role (no QueryEngine.Execute permission)"
+    when: "User attempts to execute a Lucene query"
+    then: "API returns 403 Forbidden"
+  - id: "AT-501-004"
+    scenario: "Paginated search results"
+    given: "50 content items match the query"
+    when: "User searches with page=2, pageSize=10"
+    then: "System returns items 11-20 with totalCount=50"
+
+edge_cases:
+  - id: "EC-501-001"
+    scenario: "Turkish special characters in query"
+    input: "queryText = 'Şırnak İlçesi Küçük Ölçekli'"
+    expected: "Search returns results, Turkish characters İ/ı/Ş/ş/Ö/ö/Ü/ü/Ç/ç/Ğ/ğ handled correctly"
+  - id: "EC-501-002"
+    scenario: "Empty search results"
+    input: "queryText = 'varolmayan-anahtar-kelime-xyz'"
+    expected: "System returns empty PagedResult with totalCount=0, no error"
+  - id: "EC-501-003"
+    scenario: "Turkish I/i lowercase mapping"
+    input: "queryText = 'istanbul'"
+    expected: "Finds content containing 'İstanbul' (Turkish İ→i mapping, not English I→i)"
+
+dependencies:
+  stories: ["US-301", "US-302"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.QueryEngine"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IQueryService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "ExecuteLuceneQuery"
+    - "ExecuteLuceneQueryHandler"
+  audit_events:
+    - "QueryExecuted"
+  localization_keys:
+    - "Query.Executed.Success"
+    - "Query.Validation.InvalidSyntax"
+    - "Query.Validation.EmptyQueryText"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "query:lucene:{tenantId}:{queryHash}"
+    ttl: "5m"

@@ -1,0 +1,156 @@
+# US-906: Audit Log Retention Policy and Automatic Purge
+# Spec: 4.1.9.2 — Retention policy; limit audit records by day count; purge old records
+
+story_id: "US-906"
+title: "Configure audit log retention policy and automatically purge old records"
+module: "ProjectDora.Modules.AuditTrail"
+spec_refs:
+  - "4.1.9.2"
+sprint: "S08"
+priority: "P2"
+
+role: "As a TenantAdmin"
+action: "I want to set a retention period (in days) for audit records so that records older than the configured threshold are automatically purged on a schedule"
+benefit: "So that audit storage costs remain manageable and query performance stays high as the system matures, while still meeting compliance retention requirements"
+
+inputs:
+  - name: "retentionDays"
+    type: "int"
+    required: true
+    validation: "InclusiveBetween(30, 3650)"
+    example: 365
+  - name: "maxRecords"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(10000, 10000000)"
+    example: 1000000
+  - name: "purgeScheduleCron"
+    type: "string"
+    required: false
+    validation: "Must(BeValidCronExpression)"
+    example: "0 2 * * *"
+  - name: "purgeBatchSize"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(100, 10000)"
+    example: 1000
+
+outputs:
+  - name: "retentionPolicyId"
+    type: "string"
+    description: "Unique identifier of the tenant's retention policy configuration record"
+  - name: "retentionDays"
+    type: "int"
+    description: "The configured retention period in days"
+  - name: "maxRecords"
+    type: "int"
+    description: "The configured maximum audit record count per tenant"
+  - name: "purgeScheduleCron"
+    type: "string"
+    description: "The cron expression for the scheduled purge job"
+  - name: "nextScheduledPurgeUtc"
+    type: "DateTime"
+    description: "UTC timestamp of the next scheduled purge run"
+  - name: "updatedUtc"
+    type: "DateTime"
+    description: "Timestamp when retention policy was last updated"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "AuditTrail.ManageSettings"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "AuditRetentionPolicy"
+    parts: []
+    fields:
+      - "retentionPolicyId"
+      - "tenantId"
+      - "retentionDays"
+      - "maxRecords"
+      - "purgeScheduleCron"
+      - "purgeBatchSize"
+      - "createdUtc"
+      - "updatedUtc"
+  api:
+    endpoint: "PUT /api/v1/audit/settings/retention"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Retention policy updated successfully"
+      - 400: "Validation error — retentionDays out of range or invalid cron expression"
+      - 403: "User lacks AuditTrail.ManageSettings permission"
+
+acceptance_tests:
+  - id: "AT-906-001"
+    scenario: "Configure retention policy with 365-day retention"
+    given: "Tenant has no custom retention policy; default is 365 days; user has TenantAdmin role"
+    when: "TenantAdmin sets retentionDays=180 and saves"
+    then: "AuditRetentionPolicy is updated to 180 days; a RetentionPolicyUpdated audit event is emitted; nextScheduledPurgeUtc is correctly computed from the cron expression"
+  - id: "AT-906-002"
+    scenario: "Scheduled purge job deletes records older than retention period"
+    given: "Retention policy is set to retentionDays=90; audit records from 100 days ago exist in the tenant"
+    when: "The purge background job runs (simulated via test)"
+    then: "All audit records older than 90 days are deleted; records within 90 days are preserved; an AuditPurgeCompleted event is emitted with the count of purged records"
+  - id: "AT-906-003"
+    scenario: "Purge runs in batches and does not lock the table"
+    given: "10,500 records are eligible for purge; purgeBatchSize=1000"
+    when: "Purge job runs"
+    then: "Records are deleted in 11 batches (10 full batches of 1000 + 1 batch of 500); each batch is a separate transaction; the purge completes without errors"
+  - id: "AT-906-004"
+    scenario: "Manual purge by SuperAdmin"
+    given: "SuperAdmin wants to immediately purge records older than 30 days regardless of schedule"
+    when: "SuperAdmin calls DELETE /api/v1/audit/purge"
+    then: "Purge executes immediately using current retention policy; AuditPurgeCompleted event emitted; only SuperAdmin can trigger manual purge"
+
+edge_cases:
+  - id: "EC-906-001"
+    scenario: "Retention policy set to minimum 30 days — most records purged"
+    input: "retentionDays=30"
+    expected: "Policy is accepted (30 is the minimum); all records older than 30 days will be purged on next scheduled run; system warns that this is a very short retention period"
+  - id: "EC-906-002"
+    scenario: "Purge job fails mid-run due to database error"
+    input: "Database connection drops after 3,000 of 10,000 records are purged"
+    expected: "Partially completed batches are committed; job failure is logged via Serilog with an error level; OpenTelemetry metric 'audit.purge.failure' is incremented; next scheduled run will continue purging remaining eligible records"
+  - id: "EC-906-003"
+    scenario: "maxRecords limit reached before retentionDays cutoff"
+    input: "maxRecords=100000 and tenant already has 100,001 records; oldest records are from 10 days ago (within retentionDays)"
+    expected: "Purge deletes the oldest 1,001 records to bring count back to 100,000, even though they are within the retentionDays window; both limits are enforced independently"
+
+dependencies:
+  stories: ["US-901", "US-907"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.AuditTrail"
+  external:
+    - "Quartz.NET (NuGet: Quartz, MIT license) for scheduled job execution"
+
+tech_notes:
+  abstraction_interface: "IAuditService"
+  mediatr_commands:
+    - "SetRetentionPolicyCommand"
+    - "SetRetentionPolicyCommandHandler"
+    - "PurgeAuditRecordsCommand"
+    - "PurgeAuditRecordsCommandHandler"
+  mediatr_queries:
+    - "GetRetentionPolicyQuery"
+    - "GetRetentionPolicyQueryHandler"
+  audit_events:
+    - "RetentionPolicyUpdated"
+    - "AuditPurgeCompleted"
+  localization_keys:
+    - "Audit.Retention.Updated.Success"
+    - "Audit.Retention.InvalidDays"
+    - "Audit.Retention.InvalidCron"
+    - "Audit.Retention.MinimumDaysWarning"
+    - "Audit.Purge.Completed"
+    - "Audit.Purge.Failed"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

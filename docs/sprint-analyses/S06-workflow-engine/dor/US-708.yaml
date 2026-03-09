@@ -1,0 +1,143 @@
+# US-708: Workflow Execution History and Monitoring
+# Spec: 4.1.7.3, 4.1.7.4 - Execution tracking for triggers and activities
+
+story_id: "US-708"
+title: "Workflow execution history and monitoring"
+module: "ProjectDora.Modules.Workflows"
+spec_refs:
+  - "4.1.7.3"
+  - "4.1.7.4"
+sprint: "S06"
+priority: "P2"
+
+role: "As a WorkflowAdmin"
+action: "I want to view workflow execution history with status, timing, and error details"
+benefit: "So that I can monitor workflow health, debug failures, and understand automation performance"
+
+inputs:
+  - name: "workflowId"
+    type: "string"
+    required: false
+    validation: ""
+    example: "wf-icerik-onay-001"
+  - name: "executionId"
+    type: "string"
+    required: false
+    validation: ""
+    example: "exec-001-abc"
+  - name: "status"
+    type: "string"
+    required: false
+    validation: "OneOf('Running', 'Completed', 'Faulted')"
+    example: "Faulted"
+  - name: "fromDate"
+    type: "DateTime"
+    required: false
+    validation: ""
+    example: "2026-03-01T00:00:00Z"
+  - name: "toDate"
+    type: "DateTime"
+    required: false
+    validation: ""
+    example: "2026-03-09T23:59:59Z"
+  - name: "page"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 10000)"
+    example: 1
+  - name: "pageSize"
+    type: "int"
+    required: false
+    validation: "InclusiveBetween(1, 100)"
+    example: 20
+
+outputs:
+  - name: "executions"
+    type: "PagedResult<WorkflowExecutionDto>"
+    description: "Paginated list of workflow executions"
+  - name: "totalCount"
+    type: "int"
+    description: "Total number of matching executions"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Workflow.View"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+      - "Analyst"
+  data_model:
+    content_type: "WorkflowExecution"
+    parts: []
+    fields: []
+  api:
+    endpoint: "GET /api/v1/workflows/{workflowId}/executions"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Execution history returned"
+      - 403: "User lacks Workflow.View permission"
+      - 404: "Workflow definition not found"
+
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "List all executions for a workflow"
+    given: "User has Workflow.View permission and workflow has 5 past executions"
+    when: "User requests GET /api/v1/workflows/{workflowId}/executions"
+    then: "Returns paginated list of 5 executions with status, startedUtc, completedUtc, triggerType"
+  - id: "AT-002"
+    scenario: "Filter executions by status"
+    given: "Workflow has 3 Completed and 2 Faulted executions"
+    when: "User requests executions with status=Faulted filter"
+    then: "Returns only 2 Faulted executions with error details"
+  - id: "AT-003"
+    scenario: "Get single execution details with activity log"
+    given: "Execution 'exec-001-abc' completed with 4 activity steps"
+    when: "User requests GET /api/v1/workflows/executions/{executionId}"
+    then: "Returns execution details including activity-by-activity log with timestamps, outcomes, and data"
+  - id: "AT-004"
+    scenario: "Reject execution history view without permission"
+    given: "User has Editor role (no Workflow.View permission)"
+    when: "User requests workflow execution history"
+    then: "API returns 403 Forbidden"
+
+edge_cases:
+  - id: "EC-001"
+    scenario: "Execution history for workflow with no executions"
+    input: "GET executions for a newly created workflow with zero executions"
+    expected: "Returns empty PagedResult with totalCount=0, items=[]"
+  - id: "EC-002"
+    scenario: "Date range filter with no matching executions"
+    input: "fromDate=2025-01-01, toDate=2025-01-31 (no executions in this range)"
+    expected: "Returns empty PagedResult with totalCount=0"
+  - id: "EC-003"
+    scenario: "Execution details for running workflow"
+    input: "GET execution that is currently in Running status"
+    expected: "Returns partial execution data: completedUtc=null, currentActivity shown, activity log up to current step"
+
+dependencies:
+  stories: ["US-701", "US-706"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Workflows"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IWorkflowService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "ListWorkflowExecutionsQuery"
+    - "ListWorkflowExecutionsQueryHandler"
+    - "GetWorkflowExecutionQuery"
+    - "GetWorkflowExecutionQueryHandler"
+  audit_events: []
+  localization_keys:
+    - "Workflow.Execution.History"
+    - "Workflow.Execution.NotFound"
+    - "Workflow.Execution.Status.Running"
+    - "Workflow.Execution.Status.Completed"
+    - "Workflow.Execution.Status.Faulted"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "workflow:exec:{tenantId}:{workflowId}:list:{page}"
+    ttl: "1m"

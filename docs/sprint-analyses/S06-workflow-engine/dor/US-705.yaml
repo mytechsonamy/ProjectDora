@@ -1,0 +1,140 @@
+# US-705: Pre-defined Task/Action Activities
+# Spec: 4.1.7.4 - Urunun, ilgili is akisi tetiklendikten sonra gerceklesmesi beklenen
+#       aksiyonlara iliskin cesitli gorev / is aktivitelerini (bilgi dogrulama, icerik
+#       olusturma / duzenleme / silme, cesitli mantiksal kontrol akislari, http istekleri,
+#       e-posta gonderme vb.) yapilandirmaya hazir olarak sunmasi
+
+story_id: "US-705"
+title: "Pre-defined task and action activities"
+module: "ProjectDora.Modules.Workflows"
+spec_refs:
+  - "4.1.7.4"
+sprint: "S06"
+priority: "P0"
+
+role: "As a WorkflowAdmin"
+action: "I want to configure pre-defined task activities (email, HTTP, content CRUD, conditionals, logging, scripting) in workflows"
+benefit: "So that triggered workflows can perform automated actions like sending notifications, manipulating content, and calling external services"
+
+inputs:
+  - name: "activityType"
+    type: "string"
+    required: true
+    validation: "NotEmpty, OneOf('SendEmailTask', 'HttpRequestTask', 'ContentTask', 'NotifyContentOwnerTask', 'SetPropertyTask', 'IfElseTask', 'ForLoopTask', 'LogTask', 'ScriptTask', 'ForkTask', 'JoinTask')"
+    example: "SendEmailTask"
+  - name: "properties"
+    type: "object"
+    required: true
+    validation: "NotNull"
+    example: '{"to": "admin@kosgeb.gov.tr", "subject": "Yeni icerik yayinlandi: {{ ContentItem.DisplayText }}", "body": "{{ ContentItem.DisplayText }} basariyla yayinlanmistir."}'
+  - name: "outcomes"
+    type: "List<string>"
+    required: false
+    validation: ""
+    example: '["Done", "Failed"]'
+
+outputs:
+  - name: "activityId"
+    type: "string"
+    description: "Unique ID of the activity in the workflow"
+  - name: "executionResult"
+    type: "string"
+    description: "Outcome of the activity execution (Done, Failed, True, False, etc.)"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Workflow.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+  data_model:
+    content_type: "WorkflowDef"
+    parts:
+      - "WorkflowDefPart"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/workflows/{workflowId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Activity configured in workflow"
+      - 400: "Invalid activity configuration"
+      - 403: "User lacks Workflow.Manage permission"
+
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "SendEmailTask sends email via SMTP"
+    given: "Workflow contains SendEmailTask with to='admin@kosgeb.gov.tr', subject with Liquid template"
+    when: "Workflow execution reaches SendEmailTask"
+    then: "Email sent via configured SMTP, Liquid template rendered with workflow context, outcome=Done"
+  - id: "AT-002"
+    scenario: "HttpRequestTask calls external API"
+    given: "Workflow contains HttpRequestTask with URL='https://api.example.com/notify', method=POST"
+    when: "Workflow execution reaches HttpRequestTask"
+    then: "HTTP POST sent to URL, response stored in workflow context, outcome=Done"
+  - id: "AT-003"
+    scenario: "ContentTask creates new content item"
+    given: "Workflow contains ContentTask with action=Create, contentType='Bildirim'"
+    when: "Workflow execution reaches ContentTask"
+    then: "New 'Bildirim' content item created via IContentService, outcome=Done"
+  - id: "AT-004"
+    scenario: "IfElseTask branches on condition"
+    given: "Workflow contains IfElseTask with condition '{{ ContentItem.ContentType == \"Duyuru\" }}'"
+    when: "Workflow execution reaches IfElseTask with Duyuru content item"
+    then: "Condition evaluates true, execution follows True branch"
+  - id: "AT-005"
+    scenario: "ForkTask creates parallel branches"
+    given: "Workflow contains ForkTask with 2 branches: email notification and log"
+    when: "Workflow execution reaches ForkTask"
+    then: "Both branches execute concurrently, JoinTask waits for both"
+  - id: "AT-006"
+    scenario: "LogTask writes to application log"
+    given: "Workflow contains LogTask with level=Information, message='Icerik islendi: {{ ContentItem.ContentItemId }}'"
+    when: "Workflow execution reaches LogTask"
+    then: "Log entry written at Information level with rendered message, outcome=Done"
+
+edge_cases:
+  - id: "EC-001"
+    scenario: "SendEmailTask with SMTP connection failure"
+    input: "SMTP server unreachable during email send"
+    expected: "Activity returns outcome=Failed, error stored in workflow context, workflow transitions to Faulted if no error handling branch"
+  - id: "EC-002"
+    scenario: "HttpRequestTask with timeout"
+    input: "External API does not respond within timeout (default 30s)"
+    expected: "Activity returns outcome=Failed with timeout error, workflow context updated with error details"
+  - id: "EC-003"
+    scenario: "ScriptTask with invalid JavaScript"
+    input: "Script = 'var x = ;' (syntax error)"
+    expected: "Activity returns outcome=Failed, script error details logged, workflow handles error branch"
+  - id: "EC-004"
+    scenario: "Liquid template rendering with missing variable"
+    input: "Subject template: '{{ ContentItem.NonExistentField }}'"
+    expected: "Liquid renders empty string for missing variable (no exception), email sent with partial content"
+
+dependencies:
+  stories: ["US-701", "US-704"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Workflows"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IWorkflowService"
+  mediatr_commands: []
+  mediatr_queries: []
+  audit_events:
+    - "WorkflowActivityExecuted"
+  localization_keys:
+    - "Workflow.Activity.SendEmail"
+    - "Workflow.Activity.HttpRequest"
+    - "Workflow.Activity.ContentTask"
+    - "Workflow.Activity.IfElse"
+    - "Workflow.Activity.Fork"
+    - "Workflow.Activity.Join"
+    - "Workflow.Activity.Log"
+    - "Workflow.Activity.Script"
+    - "Workflow.Activity.ExecutionFailed"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

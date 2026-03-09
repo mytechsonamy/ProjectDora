@@ -1,0 +1,153 @@
+# --- Required Fields ---
+story_id: "US-308"
+title: "RBAC enforcement on content management operations"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.3.1"
+  - "4.1.3.2"
+  - "4.1.3.3"
+sprint: "S03"
+priority: "P0"
+
+# --- User Story Statement ---
+role: "As a TenantAdmin"
+action: "I want content management operations to enforce role-based access control"
+benefit: "So that only authorized users can create, edit, publish, or delete content, protecting KOSGEB data integrity"
+
+# --- Interface Contract ---
+inputs:
+  - name: "userId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "user-editor-001"
+  - name: "contentItemId"
+    type: "string"
+    required: true
+    validation: "NotEmpty"
+    example: "4f9a8b2c3d1e"
+  - name: "operation"
+    type: "string"
+    required: true
+    validation: "NotEmpty, OneOf('Create', 'EditOwn', 'EditAll', 'Publish', 'Delete', 'ViewDraft', 'ViewPublished')"
+    example: "Publish"
+
+outputs:
+  - name: "authorized"
+    type: "bool"
+    description: "Whether the user is authorized for the operation"
+  - name: "statusCode"
+    type: "int"
+    description: "HTTP status code (200 if authorized, 403 if denied)"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentManagement.Create"
+      - "ContentManagement.EditOwn"
+      - "ContentManagement.EditAll"
+      - "ContentManagement.Publish"
+      - "ContentManagement.Delete"
+      - "ContentManagement.ViewDraft"
+      - "ContentManagement.ViewPublished"
+    denied_roles:
+      - "Anonymous"
+  data_model:
+    content_type: "dynamic"
+    parts: []
+    fields: []
+  api:
+    endpoint: "ALL /api/v1/content/**"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Operation authorized"
+      - 403: "User lacks required permission"
+      - 401: "Authentication required"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Anonymous user rejected from all content operations"
+    given: "No authentication token provided"
+    when: "Request sent to POST /api/v1/content/Duyuru"
+    then: "System returns 401 Unauthorized"
+
+  - id: "AT-002"
+    scenario: "Viewer role can read published content but cannot create"
+    given: "User has Viewer role (ContentManagement.ViewPublished only)"
+    when: "User attempts POST /api/v1/content/Duyuru to create content"
+    then: "System returns 403 Forbidden"
+
+  - id: "AT-003"
+    scenario: "Author can create and edit own content but cannot publish"
+    given: "User has Author role with ContentManagement.Create and ContentManagement.EditOwn"
+    when: "User creates content (succeeds) then tries to publish it"
+    then: "Create returns 201, Publish returns 403 Forbidden"
+
+  - id: "AT-004"
+    scenario: "Author cannot edit content owned by another user"
+    given: "User-A has Author role, content item owned by User-B"
+    when: "User-A attempts PUT /api/v1/content/Duyuru/{contentItemId}"
+    then: "System returns 403 Forbidden (EditOwn check fails, no EditAll permission)"
+
+  - id: "AT-005"
+    scenario: "Editor can edit all content and publish"
+    given: "User has Editor role with EditAll and Publish permissions"
+    when: "User edits content owned by another user and publishes it"
+    then: "Both operations succeed with 200"
+
+  - id: "AT-006"
+    scenario: "Only TenantAdmin and SuperAdmin can delete content"
+    given: "User has Editor role (no ContentManagement.Delete permission)"
+    when: "User attempts DELETE /api/v1/content/Duyuru/{contentItemId}"
+    then: "System returns 403 Forbidden"
+
+  - id: "AT-007"
+    scenario: "Tenant isolation — Tenant A cannot access Tenant B content"
+    given: "Content item exists in Tenant B"
+    when: "Authenticated user from Tenant A requests the content item"
+    then: "System returns 404 (content not visible across tenant boundary)"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "User with multiple roles gets union of permissions"
+    input: "User has both Author and SEOUzmani roles"
+    expected: "User can create content (from Author) and view published content (from SEOUzmani), permissions are unioned"
+
+  - id: "EC-002"
+    scenario: "Tampered JWT with elevated role"
+    input: "Valid JWT token with payload modified to include SuperAdmin role"
+    expected: "System returns 401 Unauthorized — JWT signature validation fails"
+
+  - id: "EC-003"
+    scenario: "Disabled user with valid token"
+    input: "User account disabled by admin but token not yet expired"
+    expected: "System returns 403 Forbidden — active user check fails despite valid token"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-101", "US-301"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+    - "ProjectDora.Modules.AdminPanel"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IAuthService"
+  mediatr_commands: []
+  mediatr_queries: []
+  audit_events:
+    - "ContentAccessDenied"
+    - "ContentAccessGranted"
+  localization_keys:
+    - "Content.Access.Denied"
+    - "Content.Access.Unauthorized"
+    - "Content.Access.TenantIsolationViolation"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "auth:{tenantId}:{userId}:permissions"
+    ttl: "5m"

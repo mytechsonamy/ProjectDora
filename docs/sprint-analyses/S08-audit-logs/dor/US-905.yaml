@@ -1,0 +1,139 @@
+# US-905: Rollback to Previous Content Version
+# Spec: 4.1.9.5 — Restore a content item to a previous version from audit trail
+
+story_id: "US-905"
+title: "Rollback a content item to a previous version from the audit trail"
+module: "ProjectDora.Modules.AuditTrail"
+spec_refs:
+  - "4.1.9.5"
+sprint: "S08"
+priority: "P1"
+
+role: "As a TenantAdmin"
+action: "I want to select a previous version of a content item from its audit history and restore it as the current version"
+benefit: "So that I can quickly recover from unintended edits or accidental deletions of content without losing the full version history"
+
+inputs:
+  - name: "contentItemId"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(26)"
+    example: "4n3a5h8e2k1t9v6y7p0w"
+  - name: "targetVersionNumber"
+    type: "int"
+    required: true
+    validation: "GreaterThan(0)"
+    example: 3
+  - name: "rollbackReason"
+    type: "string"
+    required: false
+    validation: "MaxLength(500)"
+    example: "Yanlışlıkla silinen paragraf geri alındı — V3 doğru sürümdür"
+
+outputs:
+  - name: "newVersionNumber"
+    type: "int"
+    description: "The version number of the newly created version (rollback result)"
+  - name: "contentItemId"
+    type: "string"
+    description: "Content item ID that was rolled back"
+  - name: "targetVersionNumber"
+    type: "int"
+    description: "The version number whose data was restored"
+  - name: "rollbackAuditEventId"
+    type: "string"
+    description: "ID of the ContentRolledBack audit event that was emitted"
+  - name: "createdUtc"
+    type: "DateTime"
+    description: "Timestamp of the new rollback version"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "AuditTrail.Rollback"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+      - "Denetci"
+  data_model:
+    content_type: "ContentItem (new version created in orchard schema via IContentService)"
+    parts: []
+    fields:
+      - "RollbackSource (metadata field on new version)"
+  api:
+    endpoint: "POST /api/v1/audit/rollback/{contentItemId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Rollback successful — new version created"
+      - 400: "Invalid targetVersionNumber or content item is in a non-rollbackable state"
+      - 403: "User lacks AuditTrail.Rollback permission"
+      - 404: "Content item not found or targetVersionNumber does not exist"
+      - 409: "Concurrent rollback already in progress for this content item"
+
+acceptance_tests:
+  - id: "AT-905-001"
+    scenario: "Rollback creates a new version with the data from the target version"
+    given: "Content item 'Duyuru X' is at version 5; version 3 had title='KOBİ Desteği'; user has TenantAdmin role"
+    when: "TenantAdmin rolls back content item to version 3"
+    then: "A new version 6 is created with the same content data as version 3; version 6 has RollbackSource=3 in metadata; versions 1-5 are all preserved and unchanged"
+  - id: "AT-905-002"
+    scenario: "Rollback emits ContentRolledBack audit event"
+    given: "Content item exists at version 4"
+    when: "TenantAdmin rolls back to version 2"
+    then: "A ContentRolledBack audit event is emitted with contentItemId, targetVersionNumber=2, newVersionNumber=5, and the rollbackReason if provided"
+  - id: "AT-905-003"
+    scenario: "Rolled-back version is published as the new current version"
+    given: "Content item was published at version 5; TenantAdmin rolls back to version 2"
+    when: "Rollback completes"
+    then: "The new version 6 (with v2 data) is set as the current draft; it must be explicitly published by TenantAdmin to go live"
+  - id: "AT-905-004"
+    scenario: "Rollback preserves all content parts and fields from the target version"
+    given: "Version 3 of a content item has Title='KOBİ', Body='Destek metni', Tags=['hibe', 'teknoloji'], and a media attachment"
+    when: "Rollback to version 3 is performed"
+    then: "New version contains all these fields exactly as they were in version 3 — no data truncation or loss"
+
+edge_cases:
+  - id: "EC-905-001"
+    scenario: "Rollback to the currently active version"
+    input: "targetVersionNumber equals the current latest version"
+    expected: "API returns 400 with message indicating target version is already the latest version — no rollback needed"
+  - id: "EC-905-002"
+    scenario: "Target version has been purged by retention policy"
+    input: "targetVersionNumber=1 where version 1 was deleted by audit retention purge"
+    expected: "API returns 404 — target version data no longer exists; user informed that the version was purged"
+  - id: "EC-905-003"
+    scenario: "A rolled-back version can itself be rolled back"
+    input: "Version 6 was created by rolling back to version 3; user now rolls back version 6 to version 2"
+    expected: "A version 7 is created with version 2's data; the audit trail shows: v6 is a rollback of v3, v7 is a rollback of v2 — full chain is traceable"
+
+dependencies:
+  stories: ["US-901", "US-902", "US-907"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.AuditTrail"
+    - "ProjectDora.Modules.ContentManagement"
+  external: []
+
+tech_notes:
+  abstraction_interface: "IAuditService"
+  mediatr_commands:
+    - "RollbackContentItemCommand"
+    - "RollbackContentItemCommandHandler"
+  mediatr_queries:
+    - "GetContentVersionHistoryQuery"
+    - "GetContentVersionHistoryQueryHandler"
+  audit_events:
+    - "ContentRolledBack"
+  localization_keys:
+    - "Audit.Rollback.Success"
+    - "Audit.Rollback.VersionNotFound"
+    - "Audit.Rollback.AlreadyLatestVersion"
+    - "Audit.Rollback.VersionPurged"
+    - "Audit.Rollback.InProgress"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""

@@ -1,0 +1,131 @@
+# US-907: RBAC Enforcement and Tenant Isolation on Audit Operations
+# Spec: 4.1.9.1 (security cross-cut) — RBAC and multi-tenant isolation for all audit trail operations
+
+story_id: "US-907"
+title: "Enforce RBAC permissions and tenant isolation across all audit trail operations"
+module: "ProjectDora.Modules.AuditTrail"
+spec_refs:
+  - "4.1.9.1"
+  - "4.1.6.2"
+  - "4.1.10.8"
+sprint: "S08"
+priority: "P0"
+
+role: "As a SuperAdmin"
+action: "I want all audit trail operations to be gated behind fine-grained RBAC permissions and scoped strictly to each tenant's data"
+benefit: "So that audit logs — which may expose sensitive change history and PII — are never accessible to unauthorized users and tenant data never leaks across tenant boundaries"
+
+inputs:
+  - name: "userId"
+    type: "string"
+    required: true
+    validation: "NotEmpty — extracted from authenticated JWT claims"
+    example: "u-tenant01-admin-001"
+  - name: "tenantId"
+    type: "string"
+    required: true
+    validation: "NotEmpty — extracted from request host/header, never from request body"
+    example: "tenant-kosgeb-ankara"
+  - name: "requiredPermission"
+    type: "string"
+    required: true
+    validation: "Must(BeOneOf('AuditTrail.View', 'AuditTrail.ViewAll', 'AuditTrail.ManageSettings', 'AuditTrail.ViewDiff', 'AuditTrail.Rollback', 'AuditTrail.Export', 'AuditTrail.Purge'))"
+    example: "AuditTrail.View"
+
+outputs:
+  - name: "isAuthorized"
+    type: "bool"
+    description: "Whether the current user has the required permission"
+  - name: "tenantId"
+    type: "string"
+    description: "The resolved tenant ID that scopes all data access for this request"
+  - name: "effectivePermissions"
+    type: "List<string>"
+    description: "All AuditTrail.* permissions held by the current user"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "AuditTrail.View (minimum for any audit read operation)"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Author"
+      - "Editor"
+      - "Analyst"
+  data_model:
+    content_type: "N/A (cross-cutting security concern, no dedicated data entity)"
+    parts: []
+    fields: []
+  api:
+    endpoint: "Applied as authorization middleware to all /api/v1/audit/* endpoints"
+    request_content_type: "application/json"
+    response_codes:
+      - 401: "User is not authenticated (anonymous request)"
+      - 403: "User is authenticated but lacks the required AuditTrail.* permission"
+
+acceptance_tests:
+  - id: "AT-907-001"
+    scenario: "Anonymous user is rejected from all audit endpoints"
+    given: "No authentication token is provided in the request"
+    when: "Anonymous user calls GET /api/v1/audit"
+    then: "API returns 401 Unauthorized; no audit data is returned; an access attempt is logged"
+  - id: "AT-907-002"
+    scenario: "Denetci can view audit log but cannot rollback"
+    given: "User has Denetci role (AuditTrail.View, AuditTrail.ViewDiff, AuditTrail.Export — but not AuditTrail.Rollback)"
+    when: "Denetci calls POST /api/v1/audit/rollback/{contentItemId}"
+    then: "API returns 403 Forbidden; rollback is not performed; no content version is changed"
+  - id: "AT-907-003"
+    scenario: "Tenant A user cannot access Tenant B audit records"
+    given: "User from Tenant A is authenticated; Tenant B has 50 audit events"
+    when: "Tenant A user calls GET /api/v1/audit (no explicit tenant filter in query)"
+    then: "Response contains only Tenant A's audit events; Tenant B's records are never returned; tenantId filter is applied at the repository layer regardless of user input"
+  - id: "AT-907-004"
+    scenario: "Only SuperAdmin can trigger manual audit purge"
+    given: "TenantAdmin, Denetci, and SuperAdmin users all attempt DELETE /api/v1/audit/purge"
+    when: "Each user submits the purge request"
+    then: "TenantAdmin and Denetci receive 403 Forbidden; only SuperAdmin's request succeeds and the purge executes"
+  - id: "AT-907-005"
+    scenario: "Viewer role has no access to any audit endpoint"
+    given: "User has Viewer role"
+    when: "Viewer calls GET /api/v1/audit, GET /api/v1/audit/diff, or POST /api/v1/audit/rollback"
+    then: "All calls return 403 Forbidden; no audit data is exposed"
+
+edge_cases:
+  - id: "EC-907-001"
+    scenario: "User attempts to inject a different tenantId in the request body"
+    input: "Authenticated as Tenant A user; request body contains 'tenantId': 'tenant-b'"
+    expected: "System ignores the tenantId in the request body entirely; tenantId is always derived from the authenticated JWT tenant claim; Tenant A's audit data is returned and scoped correctly"
+  - id: "EC-907-002"
+    scenario: "Role is revoked mid-session while user has an active token"
+    input: "User's AuditTrail.View permission is revoked while their JWT is still valid"
+    expected: "Next request to /api/v1/audit returns 403 — permission checks are evaluated at runtime against the current role definition, not baked into the JWT; token does not bypass real-time RBAC"
+  - id: "EC-907-003"
+    scenario: "AuditTrail.ViewAll allows viewing all content types regardless of scope"
+    input: "TenantAdmin with AuditTrail.ViewAll requests audit log for content type 'Gizli' (not in their normal content type access list)"
+    expected: "All audit events are returned including 'Gizli' content type events — AuditTrail.ViewAll bypasses content-type-level RBAC for audit viewing only; it does not grant content management access to 'Gizli'"
+
+dependencies:
+  stories: ["US-601", "US-701", "US-901"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.AuditTrail"
+    - "ProjectDora.Modules.UserRolePermission"
+  external: []
+
+tech_notes:
+  abstraction_interface: "IAuditService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "CheckAuditPermissionQuery"
+    - "CheckAuditPermissionQueryHandler"
+  audit_events:
+    - "UnauthorizedAuditAccessAttempt"
+  localization_keys:
+    - "Audit.Access.Denied"
+    - "Audit.Access.Unauthorized"
+    - "Audit.Access.TenantMismatch"
+  caching:
+    strategy: "ReadThrough (permission cache from S05 IAuthService)"
+    key_pattern: "rbac:user:{userId}:permissions"
+    ttl: "5m"

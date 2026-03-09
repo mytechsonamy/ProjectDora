@@ -1,0 +1,115 @@
+# --- Required Fields ---
+story_id: "US-204"
+title: "Cross-module content type access and JSON document storage"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.4"
+  - "4.1.2.5"
+sprint: "S02"
+priority: "P1"
+
+# --- User Story Statement ---
+role: "As a TenantAdmin"
+action: "I want content types to be accessible by other modules and stored as JSON documents without schema changes"
+benefit: "So that the system is flexible, extensible, and new content types don't require database migrations"
+
+# --- Interface Contract ---
+inputs:
+  - name: "typeName"
+    type: "string"
+    required: true
+    validation: "NotEmpty, MaxLength(100)"
+    example: "DestekProgrami"
+
+outputs:
+  - name: "contentType"
+    type: "ContentTypeDto"
+    description: "Full content type definition accessible by any module"
+  - name: "rawDocument"
+    type: "string"
+    description: "Raw JSON representation of a content item stored in YesSql"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentModeling.View"
+    denied_roles:
+      - "Anonymous"
+  data_model:
+    content_type: "ContentTypeDefinition"
+    parts:
+      - "CommonPart"
+    fields: []
+  api:
+    endpoint: "GET /api/v1/content-types/{typeName}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Content type definition returned"
+      - 401: "Authentication required"
+      - 404: "Content type not found"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Content type accessible from Workflow module context"
+    given: "Content type 'DestekProgrami' is defined with fields"
+    when: "Workflow module queries for content type definition via IContentTypeService"
+    then: "Full type definition returned including all parts and fields"
+
+  - id: "AT-002"
+    scenario: "Content stored as JSON document without schema migration"
+    given: "Content type 'DestekProgrami' has 5 fields of various types"
+    when: "A new content item is created for this type"
+    then: "Content item is stored as a JSON document in YesSql Document table, no ALTER TABLE executed"
+
+  - id: "AT-003"
+    scenario: "View raw JSON document from admin panel"
+    given: "Content item exists for type 'DestekProgrami'"
+    when: "TenantAdmin opens the raw document viewer in admin panel"
+    then: "Full JSON document is displayed including all parts, fields, and metadata"
+
+  - id: "AT-004"
+    scenario: "Adding new field does not require migration"
+    given: "Content type 'DestekProgrami' has 3 existing fields and content items exist"
+    when: "Admin adds a new NumericField named 'EkButce'"
+    then: "Existing content items remain valid, new field defaults to null, no DB migration needed"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Large JSON document with many nested parts"
+    input: "Content item with 20 parts, 50 fields, deeply nested JSON structure"
+    expected: "Document stored and retrieved correctly without corruption, admin viewer renders full JSON"
+
+  - id: "EC-002"
+    scenario: "Cross-module access with different tenant contexts"
+    input: "Module A in tenant-1 tries to access content type defined in tenant-2"
+    expected: "Content type not found (404) — tenant isolation enforced"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201", "US-202"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands: []
+  mediatr_queries:
+    - "GetContentTypeDefinitionQuery"
+    - "GetContentTypeDefinitionQueryHandler"
+    - "GetRawDocumentQuery"
+    - "GetRawDocumentQueryHandler"
+  audit_events:
+    - "ContentTypeAccessed"
+  localization_keys:
+    - "ContentModeling.RawDocument.ViewTitle"
+    - "ContentModeling.CrossModule.AccessDenied"
+  caching:
+    strategy: "ReadThrough"
+    key_pattern: "contenttype:{tenantId}:{typeName}"
+    ttl: "30m"

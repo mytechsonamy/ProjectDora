@@ -1,0 +1,132 @@
+# US-703: Drag-and-Drop Visual Workflow Designer
+# Spec: 4.1.7.2 - Is akisi araci uzerinde akislarin kolayca tasarlanabilmesine imkan vermek
+#       amaciyla surukle birak yapida calisan bir tasarim aracinin bulunmasi
+
+story_id: "US-703"
+title: "Drag-and-drop visual workflow designer"
+module: "ProjectDora.Modules.Workflows"
+spec_refs:
+  - "4.1.7.2"
+sprint: "S06"
+priority: "P1"
+
+role: "As a WorkflowAdmin"
+action: "I want to visually design workflows using a drag-and-drop interface"
+benefit: "So that I can create complex workflow automations without writing code"
+
+inputs:
+  - name: "workflowId"
+    type: "string"
+    required: false
+    validation: ""
+    example: "wf-icerik-onay-001"
+  - name: "activities"
+    type: "List<WorkflowActivityDto>"
+    required: true
+    validation: "NotEmpty"
+    example: '[{"activityId": "trigger-1", "name": "ContentPublishedEvent", "x": 100, "y": 100}, {"activityId": "notify-1", "name": "NotifyContentOwnerTask", "x": 300, "y": 100}]'
+  - name: "transitions"
+    type: "List<WorkflowTransitionDto>"
+    required: false
+    validation: ""
+    example: '[{"sourceActivityId": "trigger-1", "sourceOutcomeName": "Done", "destinationActivityId": "notify-1"}]'
+  - name: "canvasLayout"
+    type: "object"
+    required: false
+    validation: ""
+    example: '{"zoom": 1.0, "offsetX": 0, "offsetY": 0}'
+
+outputs:
+  - name: "workflowId"
+    type: "string"
+    description: "Saved workflow definition ID"
+  - name: "activities"
+    type: "List<WorkflowActivityDto>"
+    description: "Activities with x,y positions from designer"
+  - name: "transitions"
+    type: "List<WorkflowTransitionDto>"
+    description: "Visual connections between activities"
+
+constraints:
+  rbac:
+    required_permissions:
+      - "Workflow.Manage"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+      - "Editor"
+      - "Author"
+      - "Analyst"
+  data_model:
+    content_type: "WorkflowDef"
+    parts:
+      - "WorkflowDefPart"
+    fields: []
+  api:
+    endpoint: "PUT /api/v1/workflows/{workflowId}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "Workflow saved from designer"
+      - 400: "Invalid workflow structure (orphan transitions, missing start activity)"
+      - 403: "User lacks Workflow.Manage permission"
+
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Design workflow with trigger and single activity"
+    given: "WorkflowAdmin opens visual designer for new workflow"
+    when: "User drags ContentPublishedEvent trigger to canvas, drags NotifyContentOwnerTask, connects them, and saves"
+    then: "Workflow saved with 2 activities, 1 transition, x/y positions preserved"
+  - id: "AT-002"
+    scenario: "Design workflow with conditional branching"
+    given: "WorkflowAdmin opens visual designer"
+    when: "User creates ContentCreatedEvent -> IfElseTask -> (true: SendEmailTask, false: LogTask) and saves"
+    then: "Workflow saved with 4 activities and 3 transitions, branching structure preserved"
+  - id: "AT-003"
+    scenario: "Re-open and edit existing workflow in designer"
+    given: "Workflow 'IcerikOnayAkisi' exists with 3 activities"
+    when: "User opens workflow in designer, adds a new LogTask activity, connects it, and saves"
+    then: "Workflow updated with 4 activities, existing positions and connections preserved"
+  - id: "AT-004"
+    scenario: "Validate workflow structure on save"
+    given: "User designs a workflow with transitions pointing to non-existent activity"
+    when: "User attempts to save"
+    then: "API returns 400 with validation error: orphan transition detected"
+
+edge_cases:
+  - id: "EC-001"
+    scenario: "Empty workflow canvas save"
+    input: "Save with activities=[] (no activities on canvas)"
+    expected: "API returns 400: workflow must have at least one start activity"
+  - id: "EC-002"
+    scenario: "Large workflow with many activities"
+    input: "Workflow with 50 activities and 60 transitions"
+    expected: "Workflow saves successfully, designer renders all nodes without performance issues"
+  - id: "EC-003"
+    scenario: "Activity with Turkish display text in properties"
+    input: "NotifyContentOwnerTask with subject='Icerik yayinlandi: {{ ContentItem.DisplayText }}' containing Turkish chars"
+    expected: "Liquid template with Turkish characters saved and rendered correctly at execution time"
+
+dependencies:
+  stories: ["US-701"]
+  modules: ["ProjectDora.Core", "ProjectDora.Modules.Workflows"]
+  external: []
+
+tech_notes:
+  abstraction_interface: "IWorkflowService"
+  mediatr_commands:
+    - "UpdateWorkflowCommand"
+    - "UpdateWorkflowCommandHandler"
+  mediatr_queries:
+    - "GetWorkflowQuery"
+    - "GetWorkflowQueryHandler"
+  audit_events:
+    - "WorkflowUpdated"
+  localization_keys:
+    - "Workflow.Designer.SaveSuccess"
+    - "Workflow.Validation.NoStartActivity"
+    - "Workflow.Validation.OrphanTransition"
+    - "Workflow.Validation.UnreachableActivity"
+  caching:
+    strategy: "WriteThrough"
+    key_pattern: "workflow:def:{tenantId}:{workflowId}"
+    ttl: "10m"

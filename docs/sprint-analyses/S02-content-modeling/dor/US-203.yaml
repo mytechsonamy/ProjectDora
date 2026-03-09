@@ -1,0 +1,111 @@
+# --- Required Fields ---
+story_id: "US-203"
+title: "Rich text editor for content fields"
+module: "ProjectDora.Modules.ContentModeling"
+spec_refs:
+  - "4.1.2.3"
+sprint: "S02"
+priority: "P2"
+
+# --- User Story Statement ---
+role: "As an Editor"
+action: "I want a rich text editor with standard formatting features when editing rich text fields"
+benefit: "So that I can create well-formatted content with bold, italic, headings, lists, and embedded media"
+
+# --- Interface Contract ---
+inputs:
+  - name: "htmlContent"
+    type: "string"
+    required: false
+    validation: "MaxLength(100000)"
+    example: "<h2>KOBI Destek Programi</h2><p>Bu program kapsaminda <strong>KOBi'lere</strong> teknoloji gelistirme destegi saglanmaktadir.</p>"
+  - name: "editorSettings"
+    type: "object"
+    required: false
+    validation: ""
+    example: "{\"toolbar\": [\"bold\", \"italic\", \"heading\", \"unorderedList\", \"link\", \"image\"]}"
+
+outputs:
+  - name: "sanitizedHtml"
+    type: "string"
+    description: "Sanitized HTML content after XSS prevention processing"
+
+# --- Constraints ---
+constraints:
+  rbac:
+    required_permissions:
+      - "ContentManagement.Create"
+      - "ContentManagement.EditOwn"
+    denied_roles:
+      - "Anonymous"
+      - "Viewer"
+  data_model:
+    content_type: "dynamic"
+    parts: []
+    fields:
+      - "HtmlField"
+  api:
+    endpoint: "PUT /api/v1/content-types/{typeName}"
+    request_content_type: "application/json"
+    response_codes:
+      - 200: "HtmlField configured with editor settings"
+      - 400: "Invalid editor configuration"
+      - 403: "User lacks permission"
+
+# --- Acceptance Tests ---
+acceptance_tests:
+  - id: "AT-001"
+    scenario: "Rich text editor renders with standard toolbar"
+    given: "Content type has an HtmlField named 'Icerik'"
+    when: "Editor opens the content edit form in admin panel"
+    then: "Rich text editor displays with bold, italic, heading, list, link, and image buttons"
+
+  - id: "AT-002"
+    scenario: "Rich text content round-trips correctly"
+    given: "Editor has created content with HTML formatting (bold, italic, headings)"
+    when: "Content is saved and then loaded again"
+    then: "All HTML formatting is preserved exactly as entered"
+
+  - id: "AT-003"
+    scenario: "XSS prevention in rich text content"
+    given: "Editor enters content containing <script>alert('xss')</script>"
+    when: "Content is saved"
+    then: "Script tags are stripped/sanitized, safe HTML preserved"
+
+# --- Edge Cases ---
+edge_cases:
+  - id: "EC-001"
+    scenario: "Turkish characters in rich text"
+    input: "htmlContent containing 'Sirnak Ilcesi Kucuk Olcekli Girisimci Destegi' with proper Turkish characters (s-cedilla, i-dotless, etc.)"
+    expected: "All Turkish characters preserved in HTML storage and rendering"
+
+  - id: "EC-002"
+    scenario: "Very large rich text content"
+    input: "htmlContent = 100,000 characters of formatted HTML with embedded images"
+    expected: "Content saved successfully without truncation, editor performs acceptably"
+
+# --- Dependencies ---
+dependencies:
+  stories: ["US-201", "US-202"]
+  modules:
+    - "ProjectDora.Core"
+    - "ProjectDora.Modules.ContentModeling"
+  external: []
+
+# --- Technical Notes ---
+tech_notes:
+  abstraction_interface: "IContentTypeService"
+  mediatr_commands:
+    - "ConfigureHtmlFieldEditorCommand"
+    - "ConfigureHtmlFieldEditorCommandHandler"
+  mediatr_queries: []
+  audit_events:
+    - "ContentTypeModified"
+  localization_keys:
+    - "ContentModeling.RichText.EditorLabel"
+    - "ContentModeling.RichText.Toolbar.Bold"
+    - "ContentModeling.RichText.Toolbar.Italic"
+  caching:
+    strategy: "None"
+    key_pattern: ""
+    ttl: ""
