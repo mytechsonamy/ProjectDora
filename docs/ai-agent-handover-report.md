@@ -1,74 +1,72 @@
 # ProjectDora AI Agent Handover Report
 
-> Version: 2.0  
+> Version: 3.0  
 > Updated: 2026-03-10  
-> Status: Revised after implementation wave
+> Status: Revised after hardening and test validation
 
 ## 1. Executive Summary
 
-ProjectDora is a modular Orchard Core-based enterprise backoffice platform. It combines content modeling, content management, query execution, user and role administration, workflows, localization, audit trail, infrastructure and tenant operations, integrations, and theme management under one host application.
+ProjectDora is a modular Orchard Core-based enterprise backoffice platform covering content modeling, content management, query execution, identity and role administration, workflows, localization, audit trail, tenant and infrastructure operations, integrations, and theme management.
 
-Compared with the earlier assessment, the codebase has moved forward meaningfully. Several areas that were previously DTO-only or placeholder-level now execute real Orchard-backed behavior. The project should no longer be described as an internal alpha. The more accurate assessment now is:
+The latest verification materially improves the assessment again.
 
-**Current maturity: strong MVP / pre-beta**
+**Current maturity: beta candidate**
 
-This does not mean release-ready. It means the repository now has enough real implementation depth that the remaining work is concentrated in build health, dependency hygiene, several operational gaps, and product hardening rather than broad foundational scaffolding.
+Why:
 
-The current top-line conclusion for AI agents is:
+- Broad module coverage is implemented, not just scaffolded.
+- Solution-level tests now pass cleanly.
+- Recent hardening work closed several previously identified operational risks.
+- Remaining gaps are narrower and mostly concentrated in production-depth hardening rather than core feature absence.
 
-1. Treat the product as real but not fully hardened.
-2. Prioritize dependency and solution-level test health first.
-3. Focus next on operational gaps, not broad re-architecture.
-4. Use tests and module boundaries as the control plane for all further work.
+The most important conclusion for future AI agents is now:
 
-## 2. What Changed Since The Previous Review
+1. Treat the repository as a real, test-verified product candidate.
+2. Do not re-open solved architecture questions without strong evidence.
+3. Focus on production hardening, runtime guarantees, and release confidence.
+4. Preserve the existing module boundaries and recent implementation gains.
 
-The earlier review flagged QueryEngine, UserManagement listing, Workflows execution visibility, Localization status handling, AuditTrail, Infrastructure tenancy, Integration, and ThemeManagement as incomplete or mostly skeletal.
+## 2. What Changed Since The Last Review
 
-That is no longer accurate in the same way.
+The previous revision still treated the repository as “strong MVP / pre-beta” with lingering solution-level test-health concerns and a few operational gaps.
 
-The repository now shows real implementation progress in these areas:
+That is now outdated.
 
-- QueryEngine can execute ad hoc Lucene and SQL queries through Orchard query infrastructure.
-- UserManagement now has real in-memory/queryable listing behavior over Orchard users.
-- Workflows now support execution retrieval and execution listing.
-- Localization now updates default culture settings and resolves translation status from content localization state.
-- AuditTrail now persists audit events and reads them back through YesSql queries.
-- Tenant operations now manipulate Orchard shell settings rather than returning DTO-only placeholders.
-- Integration now persists API clients, webhooks, and published query endpoint settings via site settings and can actively test webhook delivery.
-- ThemeManagement now reads the active theme and manages template customization records.
+Verified changes:
 
-This implementation wave materially changes the product assessment.
+- Solution-wide tests pass.
+- QueryEngine no longer fails silently when Lucene or SQL query support is unavailable; it now throws explicit runtime exceptions.
+- QueryEngine now has a testable Lucene reindex abstraction.
+- AuditTrail diff coverage has expanded from a narrow comparison set to a broader field set.
+- Role permission generation now persists generated permissions and returns them through permission listing.
+- Cache stats now return a small but meaningful observable value instead of an entirely hardcoded placeholder.
+- Additional module tests were added for query behavior, role permission generation, cache stats/settings behavior, and audit service behavior.
 
 ## 3. Product Assessment
 
 ### 3.1 Product Strengths
 
-- Clear enterprise CMS/backoffice product direction.
-- Strong modular structure with a shared core abstraction layer.
-- Broad business capability coverage across the main operational modules.
-- Orchard Core remains a sensible platform choice for the target problem.
-- Test coverage has expanded and module-level verification is now substantially better.
-- The repository is now closer to product completion work than platform bootstrapping.
+- Strong modular structure with clear boundaries.
+- Broad product scope now backed by working implementations.
+- Orchard Core remains a good fit for the platform direction.
+- Solution-level automated verification is in place and passing.
+- The project is now in a stage where most new work can focus on reliability and product polish rather than foundational completion.
 
 ### 3.2 Product Weaknesses
 
-- Solution-wide test health is still not clean.
-- Dependency and package-audit friction is still the main engineering blocker.
-- Some “real implementations” are still light or partial rather than production-deep.
-- Certain operational behaviors still degrade quietly instead of failing explicitly.
-- Some features now persist state but still need stronger lifecycle guarantees, telemetry, and negative-path handling.
+- Some operational capabilities are still “acceptable but shallow” rather than deeply production-grade.
+- A few areas still rely on optional runtime capabilities that must be wired correctly at deployment time.
+- Certain metrics and audit semantics are functional but not yet comprehensive enough for high-assurance enterprise claims.
 
 ### 3.3 Maturity Verdict
 
-Current maturity: **Strong MVP / pre-beta**
+Current maturity: **Beta candidate**
 
 Reasoning:
 
-- Major feature areas now do real work.
-- Module tests pass in significant volume.
-- The remaining work is concentrated and actionable.
-- Full release readiness is still blocked by dependency issues and a small number of functional hardening gaps.
+- The solution compiles and tests cleanly at the solution level.
+- The repository now has real implementation depth across the major modules.
+- The remaining work is mostly hardening, observability, deeper validation, and release discipline.
 
 ## 4. Technology and Runtime Findings
 
@@ -76,7 +74,7 @@ Reasoning:
 
 The repository is still targeting **.NET 10 (`net10.0`)**.
 
-Confirmed from code/build artifacts:
+Confirmed from:
 
 - `Directory.Build.props`
 - `src/ProjectDora.Web/ProjectDora.Web.csproj`
@@ -88,405 +86,327 @@ Confirmed from code/build artifacts:
 
 - ASP.NET Core host
 - Orchard Core CMS integration
-- Modular class-library solution structure
+- Modular class library architecture
 - xUnit, FluentAssertions, Moq
-- Docker packaging path present
+- Docker packaging path
 
 ## 5. Current Delivery Status by Area
 
 ### 5.1 Host Application
 
-Status: **Good baseline**
+Status: **Good**
 
-- Orchard host wiring is straightforward and serviceable.
+- Host remains minimal and stable.
 - Health endpoints exist.
-- No major reassessment needed here.
+- No major delivery concern here.
 
 ### 5.2 Core Abstractions
 
 Status: **Good**
 
-- Core remains the right contract layer for AI-agent-driven implementation.
-- No evidence of major boundary collapse in the latest wave.
+- Still a sound foundation for parallel AI-agent execution.
+- No major structural regression observed.
 
 ### 5.3 Content Modeling
 
 Status: **Good**
 
-- Still one of the stronger modules.
-- Appears suitable as a stable dependency for related work.
+- Continues to look like one of the more mature modules.
 
 ### 5.4 Content Management
 
-Status: **Moderate to good**
+Status: **Good**
 
-- Not the main concern in the latest reassessment.
-- Should still receive targeted verification during UAT and audit-related follow-up work.
+- Not a primary concern in the latest verification wave.
+- Should still be exercised in release and UAT scenarios.
 
 ### 5.5 Query Engine
 
-Status: **Improved but not fully hardened**
+Status: **Good, with targeted hardening remaining**
 
-- Ad hoc Lucene and SQL execution now exist.
-- Saved-query lifecycle remains present.
-- SQL validation still guards execution.
+- Lucene and SQL execution paths exist.
+- Silent fallback behavior has been replaced with explicit exceptions when the required query type is unavailable.
+- Reindexing now has an abstraction-based path for execution and testing.
 
 Remaining issues:
 
-- If the relevant Orchard query module is absent, execution returns an empty result instead of a strong failure.
-- `ReindexAsync` is still a no-op.
-- Tenant scoping and production-grade execution semantics still need hardening review.
+- The Lucene rebuild flow depends on a deployment-time implementation of `ILuceneIndexRebuilder`.
+- Tenant-aware and operational runtime semantics should still be reviewed under realistic data and deployment conditions.
 
 ### 5.6 User / Role / Auth
 
-Status: **Improved**
+Status: **Good**
 
-- User listing is no longer stubbed.
-- Basic lifecycle operations remain wired to Orchard identity.
+- User listing and role management behavior are materially stronger than before.
+- Generated permission support now exists and is persisted.
 
 Remaining issues:
 
-- Listing strategy may still need stronger persistence/index-backed behavior for scale and correctness.
-- Role and permission depth should still be re-verified, especially for tenant-sensitive paths.
+- Generated permissions should still be verified end to end against real authorization behavior at runtime.
 
 ### 5.7 Workflows
 
-Status: **Improved**
+Status: **Good**
 
-- Execution retrieval and listing now exist.
-- This is a material step up from the previous review.
+- Execution retrieval and listing are implemented.
+- No immediate blocker remains in this area.
 
 Remaining issues:
 
-- Execution DTO richness, traceability, and failure semantics still look relatively light.
+- Workflow observability and richer execution metadata can still be improved.
 
 ### 5.8 Localization
 
-Status: **Improved**
+Status: **Good**
 
-- Default culture mutation now performs real site settings updates.
-- Translation status is now derived from content localization state.
+- Default culture update behavior exists.
+- Translation status is now based on real content localization state.
 
 Remaining issues:
 
-- Lifecycle depth, completeness of translation metadata, and larger-scale UX/ops behavior still need validation.
+- Broader edge-case validation is still worth doing during UAT.
 
 ### 5.9 Audit Trail
 
-Status: **Improved substantially**
+Status: **Good, but not yet compliance-grade**
 
-- Audit events are persisted and queried through YesSql.
-- Settings are persisted.
-- Purge, history lookup, and rollback delegation now exist.
-
-Remaining issues:
-
-- Diff behavior is still shallow and currently centered on a narrow set of fields.
-- Production-grade audit completeness should still be validated before any compliance-sensitive claim.
-
-### 5.10 Infrastructure / Tenant / Recipe / Cache
-
-Status: **Improved, but uneven**
-
-- Tenant lifecycle behavior now uses shell settings.
-- This is materially better than DTO-only behavior.
+- Audit persistence, retrieval, purge, settings, and rollback delegation exist.
+- Diff behavior is now broader than before.
 
 Remaining issues:
 
-- Tenant creation appears closer to settings registration than full tenant provisioning/setup.
-- Recipe and cache flows still deserve a focused follow-up review.
+- Diffing is still field-oriented rather than a full structured content diff.
+- Compliance-sensitive claims should still wait for stronger end-to-end validation.
+
+### 5.10 Infrastructure / Tenant / Cache / Recipe
+
+Status: **Moderate to good**
+
+- Tenant lifecycle behavior is significantly better than before.
+- Cache settings and purge behavior are meaningful.
+- Cache stats are now slightly more informative.
+
+Remaining issues:
+
+- Cache stats are still not true operational metrics.
+- Tenant provisioning depth should still be checked against the intended product promise.
+- Recipe behavior still deserves a dedicated follow-up review.
 
 ### 5.11 Integration
 
-Status: **Improved substantially**
+Status: **Good**
 
-- API clients, webhooks, and published query endpoint settings are now persisted through site settings.
-- Webhook test execution performs a real HTTP call path.
+- Integration settings persistence exists.
+- Webhook test execution performs real HTTP behavior.
+- Published query endpoint configuration is persisted.
 
 Remaining issues:
 
-- This is still closer to administrative integration management than a full production integration platform.
-- Delivery history, retry semantics, and runtime publication depth should still be strengthened.
+- Delivery tracking and retry semantics still look lighter than a mature integration platform.
 
 ### 5.12 Theme Management
 
-Status: **Improved**
+Status: **Good**
 
-- Active theme reading exists.
-- Activation and template customization operations now perform real work against Orchard services.
+- Active theme detection, activation, and template customization paths exist.
 
 Remaining issues:
 
-- Theme lifecycle validation and operational safety should still be tested more deeply.
+- Runtime verification under repeated admin operations is still worth strengthening.
 
 ## 6. Engineering Health Findings
 
 ### 6.1 Build and Solution Test Health
 
-Status: **Partially healthy, still blocked at solution level**
+Status: **Healthy**
 
-Observed current state:
+Verified result:
 
-- Module-level test execution is now healthy.
-- `ProjectDora.Modules.Tests` passes with **296 passing tests**.
-- Solution-wide `dotnet test ProjectDora.sln` still fails because `ProjectDora.Core.Tests` is blocked by package-audit and package-version issues.
+- `dotnet test ProjectDora.sln --no-restore` passes cleanly.
 
-Current blockers observed during verification:
+Current observed totals:
 
-- Package vulnerability warnings are treated as errors.
-- Vulnerable packages still include:
-  - `HtmlSanitizer` `8.2.871-beta`
-  - `Microsoft.Identity.Abstractions` `7.1.0`
-  - `Microsoft.Identity.Web` `3.3.1`
-  - `MimeKit` `4.8.0`
-  - `SixLabors.ImageSharp` `3.1.5`
-- There is still a downgrade conflict involving `Microsoft.Extensions.Caching.Memory`.
-- `tests/ProjectDora.Core.Tests/ProjectDora.Core.Tests.csproj` still references `Microsoft.AspNetCore.Mvc.Testing` `8.0.13` while the solution targets `net10.0`.
+- `ProjectDora.Modules.Tests`: 310 passed
+- `ProjectDora.Core.Tests`: 3 passed
+- Total passing tests: **313**
 
 Interpretation:
 
-- This is no longer a “project cannot be trusted at all” situation.
-- It is now a narrower but still important build/dependency problem.
-- The engineering bottleneck has shifted from implementation breadth to dependency hygiene and final hardening.
+- The previous solution-level dependency/test blocker is no longer active.
+- The repository now has meaningful solution-level verification.
 
 ### 6.2 Test Posture
 
-Status: **Good and improving**
+Status: **Strong**
 
-- Module test coverage appears materially better than before.
-- The test suite now provides real confidence for a large portion of the modules.
-- The missing piece is solution-wide clean execution, not absence of tests.
+- The module suite is materially larger than before.
+- New tests cover recent hardening changes.
+- Confidence is now substantially higher than in earlier reviews.
 
 ## 7. Release Readiness Assessment
 
 ### 7.1 Ready Now
 
-- Architecture exploration
-- Module boundary enforcement
-- Feature-completion work inside most existing modules
-- Internal demos
-- Targeted module hardening
-- UAT preparation work
+- Ongoing feature hardening
+- UAT preparation
+- Release candidate preparation
+- Internal beta-style evaluation
+- Smoke and regression expansion
 
 ### 7.2 Not Ready Now
 
-- Full production release
-- Compliance-sensitive audit guarantees
-- Final release signoff
-- Clean solution-level CI confidence
+- Final production signoff without further hardening
+- Strong compliance or audit guarantees without deeper validation
+- Full observability claims around cache/query/integration behavior
 
 ## 8. Revised Priority Action Plan
 
-This is the updated execution order for AI agents after the implementation wave.
+### P0: Production Hardening Of Remaining Narrow Risks
 
-### P0: Solution Build and Dependency Stabilization
-
-1. Fix `ProjectDora.Core.Tests` package compatibility and audit failures.
-2. Resolve the `Microsoft.Extensions.Caching.Memory` downgrade.
-3. Align test and host dependency versions with `net10.0`.
-4. Get `dotnet test ProjectDora.sln` green.
+1. Verify deployment wiring for `ILuceneIndexRebuilder`.
+2. Validate generated permissions against actual runtime authorization enforcement.
+3. Improve cache stats from structural placeholders toward real operational metrics.
+4. Review tenant provisioning depth against the intended product promise.
 
 Definition of done:
 
-- Solution-wide restore and test pass.
-- No blocking vulnerability-as-error failures remain in the normal developer workflow.
+- Optional runtime adapters are present where required.
+- Security and authorization semantics are validated end to end.
+- Operational metrics and admin expectations are aligned.
 
-### P1: Operational Hardening of Newly Implemented Modules
+### P1: Deepen Operational Fidelity
 
-1. Make QueryEngine fail explicitly when required Orchard runtime features are unavailable.
-2. Implement `ReindexAsync`.
-3. Deepen audit diff behavior beyond the current narrow field set.
-4. Harden tenant lifecycle from shell-settings management toward reliable tenant provisioning semantics.
-5. Strengthen webhook delivery tracking, persistence, and delivery-state handling.
-6. Validate theme activation/template operations with stronger runtime tests.
+1. Expand audit diff depth where richer content comparisons are needed.
+2. Add delivery-state persistence and retry semantics for integration flows where required.
+3. Improve workflow and query observability.
+4. Add stronger negative-path validation for admin flows.
 
-Definition of done:
+### P2: UAT And Release Confidence
 
-- Core operational flows behave predictably in both success and failure cases.
-- Newly implemented modules no longer rely on “best effort” behavior in critical paths.
-
-### P2: Security, Authorization, and Tenant Isolation Review
-
-1. Re-validate SQL execution safety around all query entry points.
-2. Verify tenant scoping in query, audit, integration, and identity flows.
-3. Review authorization boundaries across admin operations.
-4. Review secrets and sensitive configuration handling.
-
-### P3: Product Completion and UX/Administration Refinement
-
-1. Validate admin menus, permissions, and actual runtime actions end to end.
-2. Improve validation and user-facing failure handling.
-3. Close remaining consistency gaps between service behavior and admin expectations.
-
-### P4: UAT, Smoke Testing, and Release Preparation
-
-1. Expand end-to-end business scenarios.
-2. Add seeded test/demo data flows.
-3. Add smoke tests for startup, key journeys, and release packaging.
-4. Prepare a release candidate checklist.
+1. Build end-to-end product journey coverage.
+2. Add seeded demo/test data flows.
+3. Add smoke tests for startup and critical user journeys.
+4. Build a release checklist and beta acceptance criteria.
 
 ## 9. Revised AI-Agent Backlog
 
-This backlog reflects the current state rather than the older “fill every skeleton module” assumption.
+### 9.1 Query and Search Runtime
 
-### 9.1 Foundation and Build
+- Implement and verify production deployment of `ILuceneIndexRebuilder`.
+- Add runtime tests covering missing/adapted Lucene infrastructure.
+- Validate query behavior under tenant and scale scenarios.
 
-- Fix solution-level dependency conflicts.
-- Upgrade or realign test package versions for `net10.0`.
-- Clean the package-audit failure path.
-- Add CI checks for restore, build, test, and package audit.
+### 9.2 Authorization and Permissions
 
-### 9.2 Query Engine
+- Validate that generated permissions are not only listed but actually effective in authorization paths.
+- Add tests for permission generation to runtime enforcement flow.
 
-- Replace silent empty fallback behavior with explicit capability-aware handling.
-- Implement `ReindexAsync`.
-- Review SQL execution for tenant scoping and operational safety.
-- Add runtime integration tests around missing-module and enabled-module behavior.
+### 9.3 Audit and Compliance Confidence
 
-### 9.3 User / Role / Auth
+- Expand diff depth if required by product expectations.
+- Add scenario tests around rollback, audit history, and actor traceability.
 
-- Verify correctness and scale behavior of user listing.
-- Recheck role and permission lifecycle completeness.
-- Add more negative-path and tenant-sensitive tests.
+### 9.4 Infrastructure and Operations
 
-### 9.4 Workflows
+- Review tenant setup depth.
+- Improve cache metrics.
+- Review recipe-related operational completeness.
 
-- Improve execution metadata and traceability.
-- Add deeper workflow-history and fault-path tests.
+### 9.5 Integration Hardening
 
-### 9.5 Localization
+- Add delivery tracking persistence.
+- Add retry and failure-state semantics where appropriate.
+- Add stronger tests around webhook behavior.
 
-- Add richer translation-state tests and edge-case handling.
-- Verify behavior against multiple localized content sets.
+### 9.6 QA, UAT, and Release
 
-### 9.6 Audit Trail
-
-- Extend diff fidelity.
-- Add stronger rollback safety tests.
-- Validate retention and purge behavior under realistic data volume.
-
-### 9.7 Infrastructure
-
-- Clarify whether tenant creation must also perform setup/provisioning.
-- Harden tenant lifecycle flows accordingly.
-- Review recipe and cache services in the same pass.
-
-### 9.8 Integration
-
-- Persist delivery results and delivery timestamps more completely.
-- Add retry/error-handling strategy where required.
-- Verify published-query API lifecycle against real runtime exposure needs.
-
-### 9.9 Theme Management
-
-- Add stronger tests around activation, active-theme reporting, and template reset semantics.
-- Validate safety and correctness under concurrent or repeated updates.
-
-### 9.10 QA and UAT
-
-- Convert current module confidence into end-to-end product confidence.
-- Add UAT coverage for content, identity, queries, workflows, localization, audit, tenancy, integration, and theme changes.
+- Build end-to-end scenario coverage across content, identity, workflows, localization, audit, integration, tenancy, and themes.
+- Create beta acceptance checklist.
+- Create release-readiness checklist.
 
 ## 10. Recommended AI-Agent Work Packages
 
-### Agent 1: Build and Dependency Stabilization Agent
+### Agent 1: Runtime Hardening Agent
 
 Mission:
 
-- Make the whole solution restore and test cleanly on `net10.0`.
+- Harden the remaining runtime-sensitive edges in query, cache, and tenant behavior.
 
 Primary outputs:
 
-- Dependency fixes
-- Package-audit resolution strategy
-- Green solution test run
+- Lucene rebuild wiring
+- Better operational metrics
+- Tenant provisioning validation
 
-### Agent 2: Query and Runtime Safety Agent
+### Agent 2: Authorization and Security Agent
 
 Mission:
 
-- Harden QueryEngine from “implemented” to “operationally safe”.
+- Validate runtime authorization correctness, especially around generated permissions and admin actions.
 
 Primary outputs:
 
-- Reindex implementation
-- Explicit failure semantics
-- Tenant-aware execution review
-- Query runtime tests
+- Authorization verification
+- Permission-flow tests
+- Security gap review
 
-### Agent 3: Identity and Tenant Hardening Agent
+### Agent 3: Audit and Traceability Agent
 
 Mission:
 
-- Validate and harden user, role, auth, and tenant lifecycle behavior.
+- Improve audit depth and release confidence around rollback, history, and traceability.
 
 Primary outputs:
 
-- Correctness and scale improvements
-- Tenant lifecycle hardening
-- Additional tests
+- Deeper diff behavior
+- Additional audit tests
+- Traceability review
 
-### Agent 4: Audit and Workflow Hardening Agent
+### Agent 4: Integration and Ops Agent
 
 Mission:
 
-- Deepen audit fidelity and workflow execution observability.
+- Deepen integration delivery semantics and operational readiness.
 
 Primary outputs:
 
-- Better diffs
-- Better execution history semantics
-- Hardening tests
+- Delivery tracking
+- Retry and failure semantics
+- Integration runtime tests
 
-### Agent 5: Integration and Theme Hardening Agent
+### Agent 5: QA and Release Agent
 
 Mission:
 
-- Turn newly implemented integration and theme behaviors into production-safe features.
+- Convert solution-level green tests into end-to-end beta confidence.
 
 Primary outputs:
 
-- Better delivery tracking
-- Better lifecycle guarantees
-- Runtime verification tests
-
-### Agent 6: QA, UAT, and Release Agent
-
-Mission:
-
-- Translate module-level confidence into release-level confidence.
-
-Primary outputs:
-
-- UAT checklist
+- UAT scenarios
 - Smoke tests
-- Release-readiness checklist
-- Risk register
+- Release checklist
+- Beta acceptance criteria
 
 ## 11. Execution Rules For Future AI Agents
 
-1. Start with solution-level build health before broad new feature work.
-2. Treat implemented modules as real systems that need hardening, not wholesale rewrites.
-3. Do not reintroduce placeholder logic where real behavior now exists.
-4. Preserve module boundaries through `ProjectDora.Core`.
-5. Pair functional changes with tests.
-6. Be explicit about runtime assumptions involving Orchard modules and shell state.
-7. Do not declare production readiness until solution-wide tests and dependency hygiene are clean.
+1. Do not destabilize the currently green solution test baseline.
+2. Treat existing implementations as the default and extend them incrementally.
+3. Preserve module boundaries through `ProjectDora.Core`.
+4. Pair all hardening work with tests.
+5. Do not replace explicit failure semantics with silent fallbacks.
+6. Be explicit about any runtime dependency on optional Orchard modules or adapters.
 
 ## 12. Updated Done Criteria For The Whole Project
 
-The project can be considered **beta-ready** only when all of the following are true:
+The project can be considered **release-ready** only when all of the following are true:
 
-- `dotnet test ProjectDora.sln` succeeds cleanly.
-- No critical or high dependency vulnerabilities remain in the intended shipped set.
-- Query runtime behavior is explicit and hardened.
-- Audit behavior is sufficiently deep for trustworthy operational use.
-- Tenant lifecycle behavior matches the intended product promise.
-- Integration and theme operations are tested beyond happy-path persistence.
-- End-to-end product journeys are covered by smoke/UAT scenarios.
+- Solution tests remain green consistently.
+- Remaining runtime adapters are wired in real deployments.
+- Authorization semantics are validated end to end.
+- Audit depth is sufficient for the intended enterprise claims.
+- Cache, integration, and tenant operations are operationally observable.
+- End-to-end product journeys have smoke/UAT coverage.
 
 ## 13. Bottom Line
 
-ProjectDora is no longer best described as an incomplete skeleton. It now has real implementation momentum and enough module depth to be taken seriously as a strong MVP. The strategic question has changed. The repository no longer primarily needs breadth; it needs stabilization, hardening, and release discipline.
-
-That makes it an even better candidate for AI-agent execution than before, provided the next wave is tightly focused on solution health, operational correctness, and product-grade verification.
+ProjectDora now looks like a real beta candidate rather than an emerging MVP. The repository has crossed the line from “implementation-in-progress” to “stabilization and release preparation.” That changes how AI agents should be used: not to fill wide feature gaps, but to harden the final edge cases, verify runtime guarantees, and build release confidence without regressing the solid baseline now in place.

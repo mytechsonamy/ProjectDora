@@ -930,14 +930,16 @@ a[href*="module"] code {
   border-left: 3px solid #C1121F !important;
 }
 
-/* Sub-menu items specifically — slightly dimmer + indented */
+/* Sub-menu items specifically — indented with visual depth */
 #adminMenu .collapse a.item-label,
 #adminMenu .collapsing a.item-label,
 #left-nav .collapse a.item-label,
 #left-nav .collapsing a.item-label {
-  color: rgba(255, 255, 255, 0.72) !important;
-  font-size: 0.84rem !important;
-  padding-left: 2.25rem !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+  font-size: 0.83rem !important;
+  padding-left: 1.25rem !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
 }
 
 #adminMenu .collapse a.item-label:hover,
@@ -954,14 +956,18 @@ a[href*="module"] code {
   border-left: 3px solid #C1121F !important;
 }
 
-/* Collapse container — transparent */
+/* Collapse container — slightly darker background to visually group sub-items */
 #ta-left-sidebar .collapse,
 #ta-left-sidebar .collapsing,
 #left-nav .collapse,
 #left-nav .collapsing,
 #adminMenu .collapse,
 #adminMenu .collapsing {
-  background-color: transparent !important;
+  background-color: rgba(0, 0, 0, 0.15) !important;
+  margin: 2px 8px !important;
+  border-radius: 6px !important;
+  border-left: 2px solid rgba(193, 18, 31, 0.5) !important;
+  padding: 4px 0 !important;
 }
 
 /* Icons — white/faded */

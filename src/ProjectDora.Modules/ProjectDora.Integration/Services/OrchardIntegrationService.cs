@@ -16,6 +16,23 @@ internal sealed class IntegrationSettings
     public List<ApiClientRecord> ApiClients { get; set; } = new();
     public List<WebhookRecord> Webhooks { get; set; } = new();
     public List<QueryEndpointRecord> QueryEndpoints { get; set; } = new();
+
+    /// <summary>
+    /// Delivery log keyed by webhookId. Capped at IIntegrationService.MaxDeliveryLogEntries per entry.
+    /// </summary>
+    public Dictionary<string, List<DeliveryLogRecord>> DeliveryLogs { get; set; } = new();
+}
+
+internal sealed class DeliveryLogRecord
+{
+    public string WebhookId { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public int HttpStatusCode { get; set; }
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public DateTime AttemptedUtc { get; set; }
+    public long DurationMs { get; set; }
+    public bool WasRetry { get; set; }
 }
 
 internal sealed class ApiClientRecord
@@ -204,6 +221,60 @@ public sealed class OrchardIntegrationService : IIntegrationService
             timestamp = DateTime.UtcNow,
         });
 
+        // Attempt 1 (primary)
+        var firstResult = await DeliverOnceAsync(record, payload, wasRetry: false);
+
+        // Immediate 1x retry on server error (5xx) or transport failure (status 0).
+        // This does NOT retry on 4xx — those are configuration errors, not transient failures.
+        WebhookDeliveryResultDto finalResult;
+        if (!firstResult.Success && firstResult.HttpStatusCode is 0 or >= 500)
+        {
+            var retryResult = await DeliverOnceAsync(record, payload, wasRetry: true);
+            finalResult = retryResult;
+        }
+        else
+        {
+            finalResult = firstResult;
+        }
+
+        // Persist both the first attempt and (if applicable) the retry to delivery log.
+        await AppendDeliveryLogAsync(webhookId, firstResult, wasRetry: false);
+        if (finalResult != firstResult)
+        {
+            await AppendDeliveryLogAsync(webhookId, finalResult, wasRetry: true);
+        }
+
+        return finalResult;
+    }
+
+    public async Task<IReadOnlyList<WebhookDeliveryLogEntry>> GetDeliveryHistoryAsync(string webhookId)
+    {
+        var site = await _siteService.GetSiteSettingsAsync();
+        var settings = site.As<IntegrationSettings>();
+
+        if (settings is null || !settings.DeliveryLogs.TryGetValue(webhookId, out var logs))
+        {
+            return Array.Empty<WebhookDeliveryLogEntry>();
+        }
+
+        // Most recent first.
+        return logs
+            .OrderByDescending(l => l.AttemptedUtc)
+            .Select(l => new WebhookDeliveryLogEntry(
+                l.WebhookId,
+                l.Url,
+                l.HttpStatusCode,
+                l.Success,
+                l.ErrorMessage,
+                l.AttemptedUtc,
+                TimeSpan.FromMilliseconds(l.DurationMs),
+                l.WasRetry))
+            .ToList();
+    }
+
+    private async Task<WebhookDeliveryResultDto> DeliverOnceAsync(
+        WebhookRecord record, string payload, bool wasRetry)
+    {
         var started = DateTime.UtcNow;
         try
         {
@@ -220,7 +291,7 @@ public sealed class OrchardIntegrationService : IIntegrationService
             var duration = DateTime.UtcNow - started;
 
             return new WebhookDeliveryResultDto(
-                webhookId,
+                record.WebhookId,
                 record.Url,
                 (int)response.StatusCode,
                 response.IsSuccessStatusCode,
@@ -231,13 +302,48 @@ public sealed class OrchardIntegrationService : IIntegrationService
         {
             var duration = DateTime.UtcNow - started;
             return new WebhookDeliveryResultDto(
-                webhookId,
+                record.WebhookId,
                 record.Url,
                 0,
                 Success: false,
                 ex.Message,
                 duration);
         }
+    }
+
+    private async Task AppendDeliveryLogAsync(
+        string webhookId, WebhookDeliveryResultDto result, bool wasRetry)
+    {
+        var siteMutable = await _siteService.LoadSiteSettingsAsync();
+        siteMutable.Alter<IntegrationSettings>(settings =>
+        {
+            if (!settings.DeliveryLogs.TryGetValue(webhookId, out var logs))
+            {
+                logs = new List<DeliveryLogRecord>();
+                settings.DeliveryLogs[webhookId] = logs;
+            }
+
+            logs.Add(new DeliveryLogRecord
+            {
+                WebhookId = webhookId,
+                Url = result.Url,
+                HttpStatusCode = result.HttpStatusCode,
+                Success = result.Success,
+                ErrorMessage = result.ErrorMessage,
+                AttemptedUtc = DateTime.UtcNow,
+                DurationMs = (long)result.Duration.TotalMilliseconds,
+                WasRetry = wasRetry,
+            });
+
+            // Cap log at MaxDeliveryLogEntries (most recent retained).
+            int maxEntries = IIntegrationService.MaxDeliveryLogEntries;
+            if (logs.Count > maxEntries)
+            {
+                logs.RemoveRange(0, logs.Count - maxEntries);
+            }
+        });
+
+        await _siteService.UpdateSiteSettingsAsync(siteMutable);
     }
 
     public async Task<ApiQueryEndpointDto> PublishQueryAsApiAsync(string queryId, PublishQueryApiCommand command)

@@ -1,11 +1,21 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
+using OrchardCore.Entities;
 using OrchardCore.Security;
 using OrchardCore.Security.Permissions;
+using OrchardCore.Settings;
 using OrchardCore.Users;
 using ProjectDora.Core.Abstractions;
 
 namespace ProjectDora.UserManagement.Services;
+
+/// <summary>
+/// Dynamically generated permissions persisted via ISiteService.
+/// </summary>
+internal sealed class GeneratedPermissionsData
+{
+    public List<string> PermissionNames { get; set; } = new();
+}
 
 public sealed class OrchardRoleService : ProjectDora.Core.Abstractions.IRoleService
 {
@@ -14,15 +24,18 @@ public sealed class OrchardRoleService : ProjectDora.Core.Abstractions.IRoleServ
     private readonly RoleManager<IRole> _roleManager;
     private readonly IEnumerable<IPermissionProvider> _permissionProviders;
     private readonly UserManager<IUser> _userManager;
+    private readonly ISiteService _siteService;
 
     public OrchardRoleService(
         RoleManager<IRole> roleManager,
         IEnumerable<IPermissionProvider> permissionProviders,
-        UserManager<IUser> userManager)
+        UserManager<IUser> userManager,
+        ISiteService siteService)
     {
         _roleManager = roleManager;
         _permissionProviders = permissionProviders;
         _userManager = userManager;
+        _siteService = siteService;
     }
 
     public async Task<RoleDto> CreateAsync(CreateRoleCommand command)
@@ -144,19 +157,53 @@ public sealed class OrchardRoleService : ProjectDora.Core.Abstractions.IRoleServ
             }
         }
 
+        // Include dynamically generated permissions persisted via ISiteService
+        var site = await _siteService.LoadSiteSettingsAsync();
+        var generated = site.As<GeneratedPermissionsData>();
+        if (generated is not null)
+        {
+            foreach (var name in generated.PermissionNames)
+            {
+                if (!allPermissions.Any(p => p.Name == name))
+                {
+                    allPermissions.Add(new PermissionDto(name, string.Empty, "Generated", false));
+                }
+            }
+        }
+
         return allPermissions;
     }
 
-    public Task GenerateContentTypePermissionsAsync(string contentTypeName)
+    public async Task GenerateContentTypePermissionsAsync(string contentTypeName)
     {
-        // Orchard Core's ContentTypePermissions module handles this automatically
-        return Task.CompletedTask;
+        var names = GetContentTypePermissionNames(contentTypeName);
+        await PersistGeneratedPermissionsAsync(names);
     }
 
-    public Task GenerateQueryPermissionAsync(string queryName)
+    public async Task GenerateQueryPermissionAsync(string queryName)
     {
-        // Permission name convention: Query.Execute.{queryName}
-        return Task.CompletedTask;
+        await PersistGeneratedPermissionsAsync(new[] { $"Query.Execute.{queryName}" });
+    }
+
+    private static string[] GetContentTypePermissionNames(string contentTypeName) =>
+        new[]
+        {
+            $"View_{contentTypeName}",
+            $"Preview_{contentTypeName}",
+            $"Publish_{contentTypeName}",
+            $"Edit_{contentTypeName}",
+            $"Delete_{contentTypeName}",
+            $"ViewOwn_{contentTypeName}",
+            $"EditOwn_{contentTypeName}",
+            $"DeleteOwn_{contentTypeName}",
+        };
+
+    private async Task PersistGeneratedPermissionsAsync(IEnumerable<string> names)
+    {
+        var site = await _siteService.LoadSiteSettingsAsync();
+        site.Alter<GeneratedPermissionsData>(d =>
+            d.PermissionNames = d.PermissionNames.Union(names).ToList());
+        await _siteService.UpdateSiteSettingsAsync(site);
     }
 
     private async Task<RoleDto> MapToDtoAsync(IRole role)

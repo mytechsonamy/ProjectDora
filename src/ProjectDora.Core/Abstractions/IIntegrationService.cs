@@ -13,9 +13,19 @@ public interface IIntegrationService
     Task DeleteWebhookAsync(string webhookId);
     Task<WebhookDeliveryResultDto> TestWebhookAsync(string webhookId);
 
+    /// <summary>
+    /// Returns the last N delivery attempts for a webhook (most recent first).
+    /// Each TestWebhookAsync call appends a log entry; the list is capped at
+    /// <see cref="IIntegrationService.MaxDeliveryLogEntries"/> entries per webhook.
+    /// </summary>
+    Task<IReadOnlyList<WebhookDeliveryLogEntry>> GetDeliveryHistoryAsync(string webhookId);
+
     Task<ApiQueryEndpointDto> PublishQueryAsApiAsync(string queryId, PublishQueryApiCommand command);
     Task<IReadOnlyList<ApiQueryEndpointDto>> ListPublishedQueriesAsync();
     Task UnpublishQueryApiAsync(string queryId);
+
+    /// <summary>Maximum delivery log entries stored per webhook.</summary>
+    static int MaxDeliveryLogEntries => 10;
 }
 
 public record ApiClientDto(
@@ -56,6 +66,20 @@ public record WebhookDeliveryResultDto(
     bool Success,
     string? ErrorMessage,
     TimeSpan Duration);
+
+/// <summary>
+/// A single persisted delivery attempt record for a webhook.
+/// Stored in IntegrationSettings and returned by GetDeliveryHistoryAsync.
+/// </summary>
+public record WebhookDeliveryLogEntry(
+    string WebhookId,
+    string Url,
+    int HttpStatusCode,
+    bool Success,
+    string? ErrorMessage,
+    DateTime AttemptedUtc,
+    TimeSpan Duration,
+    bool WasRetry);
 
 public record ApiQueryEndpointDto(
     string QueryId,

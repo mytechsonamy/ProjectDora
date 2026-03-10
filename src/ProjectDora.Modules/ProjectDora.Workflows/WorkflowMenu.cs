@@ -22,12 +22,12 @@ public sealed class WorkflowMenu : INavigationProvider
         builder
             .Add(S["Workflows"], S["Workflows"].PrefixPosition("6"), wf => wf
                 .Permission(Permissions.ViewWorkflows)
-                .Add(S["All Workflows"], S["All Workflows"].PrefixPosition("1"), all => all
-                    .Action("Index", "Admin", new { area = "OrchardCore.Workflows" })
+                .Add(S["Workflow Types"], S["Workflow Types"].PrefixPosition("1"), all => all
+                    .Action("Index", "WorkflowType", new { area = "OrchardCore.Workflows" })
                     .Permission(Permissions.ViewWorkflows)
                     .LocalNav())
                 .Add(S["Execution History"], S["Execution History"].PrefixPosition("2"), hist => hist
-                    .Action("Index", "Execution", new { area = "OrchardCore.Workflows" })
+                    .Action("Index", "Workflow", new { area = "OrchardCore.Workflows" })
                     .Permission(Permissions.ViewWorkflows)
                     .LocalNav()));
 

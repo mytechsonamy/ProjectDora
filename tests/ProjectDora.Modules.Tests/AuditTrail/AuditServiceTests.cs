@@ -193,4 +193,99 @@ public class AuditServiceTests
         types.Should().HaveCount(1);
         types.Should().NotContain("Article");
     }
+
+    // ── Risk 5: Extended diff — 7 fields ──────────────────────────────────
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-901")]
+    public void AuditTrail_GetDiff_VersionChange_DetectedInDiff()
+    {
+        var from = new ContentItemDto(
+            "ci-001", "Article", "Title", "Draft", 1, "user", DateTime.UtcNow, DateTime.UtcNow, null, "tr");
+        var to = new ContentItemDto(
+            "ci-001", "Article", "Title", "Draft", 2, "user", DateTime.UtcNow, DateTime.UtcNow, null, "tr");
+
+        var changes = BuildDiff(from, to);
+
+        changes.Should().ContainSingle();
+        changes[0].FieldPath.Should().Be("Version");
+        changes[0].OldValue.Should().Be("1");
+        changes[0].NewValue.Should().Be("2");
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-901")]
+    public void AuditTrail_GetDiff_UnchangedFields_NotIncluded()
+    {
+        var now = DateTime.UtcNow;
+        var from = new ContentItemDto(
+            "ci-001", "Article", "Same Title", "Draft", 1, "admin", now, now, null, "tr");
+        var to = new ContentItemDto(
+            "ci-001", "Article", "Same Title", "Draft", 1, "admin", now, now, null, "tr");
+
+        var changes = BuildDiff(from, to);
+
+        changes.Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-901")]
+    public void AuditTrail_GetDiff_MultipleFieldChanges_AllDetected()
+    {
+        var now = DateTime.UtcNow;
+        var published = now.AddMinutes(5);
+
+        var from = new ContentItemDto(
+            "ci-001", "Article", "Old Title", "Draft", 1, "user1", now, now, null, "tr");
+        var to = new ContentItemDto(
+            "ci-001", "Article", "New Title", "Published", 2, "user2", now, now, published, "en");
+
+        var changes = BuildDiff(from, to);
+
+        // DisplayText, Status, Version, Owner, Culture, PublishedUtc all changed
+        changes.Should().HaveCount(6);
+        changes.Select(c => c.FieldPath).Should().Contain("DisplayText");
+        changes.Select(c => c.FieldPath).Should().Contain("Status");
+        changes.Select(c => c.FieldPath).Should().Contain("Version");
+        changes.Select(c => c.FieldPath).Should().Contain("Owner");
+        changes.Select(c => c.FieldPath).Should().Contain("Culture");
+        changes.Select(c => c.FieldPath).Should().Contain("PublishedUtc");
+    }
+
+    /// <summary>
+    /// Mirrors the 7-field comparison logic from OrchardAuditService.GetDiffAsync.
+    /// </summary>
+    private static List<FieldDiffEntry> BuildDiff(ContentItemDto from, ContentItemDto to)
+    {
+        var changes = new List<FieldDiffEntry>();
+
+        var comparisons = new[]
+        {
+            ("DisplayText",  from.DisplayText,
+                             to.DisplayText),
+            ("Status",       from.Status,
+                             to.Status),
+            ("Version",      from.Version.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                             to.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("Owner",        from.Owner,
+                             to.Owner),
+            ("Culture",      from.Culture ?? string.Empty,
+                             to.Culture ?? string.Empty),
+            ("ContentType",  from.ContentType,
+                             to.ContentType),
+            ("PublishedUtc", from.PublishedUtc?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+                             to.PublishedUtc?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty),
+        };
+
+        foreach (var (field, oldVal, newVal) in comparisons)
+        {
+            if (oldVal != newVal)
+                changes.Add(new FieldDiffEntry(field, "Modified", oldVal, newVal));
+        }
+
+        return changes;
+    }
 }

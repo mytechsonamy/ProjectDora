@@ -113,6 +113,43 @@ public class ModuleRegistrationTests
                 $"Administrator should have all {allPermissions.Count} permissions in {provider.GetType().Namespace}");
         }
     }
+
+    // ── P0-3/P1: All modules must declare [assembly: Module()] ─────────────
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-1301")]
+    public void AllModules_HaveManifest_FeatureManagementVisible()
+    {
+        // OC feature management discovers modules via [assembly: Module()] attribute.
+        // Modules without this attribute are invisible to the OC shell feature toggle UI
+        // and some module lifecycle hooks (e.g., IFeatureEventHandler) may not fire.
+        // All 10 modules must declare the attribute.
+        var moduleAssemblies = new[]
+        {
+            typeof(ProjectDora.AdminPanel.Startup).Assembly,
+            typeof(ProjectDora.AuditTrail.Startup).Assembly,
+            typeof(ProjectDora.ContentModeling.Startup).Assembly,
+            typeof(ProjectDora.Infrastructure.Startup).Assembly,
+            typeof(ProjectDora.Integration.Startup).Assembly,
+            typeof(ProjectDora.Localization.Startup).Assembly,
+            typeof(ProjectDora.QueryEngine.Startup).Assembly,
+            typeof(ProjectDora.ThemeManagement.Startup).Assembly,
+            typeof(ProjectDora.UserManagement.Startup).Assembly,
+            typeof(ProjectDora.Workflows.Startup).Assembly,
+        };
+
+        foreach (var assembly in moduleAssemblies)
+        {
+            var hasModule = assembly
+                .GetCustomAttributes(typeof(OrchardCore.Modules.Manifest.ModuleAttribute), inherit: false)
+                .Length > 0;
+
+            hasModule.Should().BeTrue(
+                $"{assembly.GetName().Name} must declare [assembly: Module(...)] " +
+                "for OC feature management discoverability");
+        }
+    }
 }
 
 internal static class TestLocalizer

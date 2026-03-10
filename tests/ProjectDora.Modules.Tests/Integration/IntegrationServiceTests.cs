@@ -177,4 +177,64 @@ public class IntegrationServiceTests
         cmd.AllowedScopes.Should().BeNullOrEmpty();
         cmd.AllowedGrantTypes.Should().BeNullOrEmpty();
     }
+
+    // ── P1-2: WebhookDeliveryLogEntry DTO ─────────────────────────────────
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-1101")]
+    public void WebhookDeliveryLogEntry_SuccessfulDelivery_FieldsMapped()
+    {
+        var attempted = DateTime.UtcNow;
+        var entry = new WebhookDeliveryLogEntry(
+            "wh-001",
+            "https://example.com/hook",
+            HttpStatusCode: 200,
+            Success: true,
+            ErrorMessage: null,
+            AttemptedUtc: attempted,
+            Duration: TimeSpan.FromMilliseconds(80),
+            WasRetry: false);
+
+        entry.WebhookId.Should().Be("wh-001");
+        entry.Success.Should().BeTrue();
+        entry.HttpStatusCode.Should().Be(200);
+        entry.ErrorMessage.Should().BeNull();
+        entry.WasRetry.Should().BeFalse();
+        entry.Duration.TotalMilliseconds.Should().Be(80);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-1101")]
+    public void WebhookDeliveryLogEntry_RetryAttempt_WasRetryIsTrue()
+    {
+        // When the primary attempt fails (5xx) and an immediate retry is made,
+        // the retry log entry must carry WasRetry=true so the UI can distinguish
+        // primary failures from retry outcomes.
+        var entry = new WebhookDeliveryLogEntry(
+            "wh-002",
+            "https://example.com/hook",
+            HttpStatusCode: 200,
+            Success: true,
+            ErrorMessage: null,
+            AttemptedUtc: DateTime.UtcNow,
+            Duration: TimeSpan.FromMilliseconds(150),
+            WasRetry: true);
+
+        entry.WasRetry.Should().BeTrue(
+            "delivery log must record whether this attempt was an automatic retry");
+        entry.Success.Should().BeTrue("retry succeeded, so the final result is success");
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-1101")]
+    public void IIntegrationService_MaxDeliveryLogEntries_IsTen()
+    {
+        // The cap is defined as a static interface member so it can be consumed
+        // by both the service implementation and any monitoring/display components.
+        IIntegrationService.MaxDeliveryLogEntries.Should().Be(10,
+            "delivery log per webhook is capped at 10 entries to bound ISiteService payload growth");
+    }
 }

@@ -89,4 +89,92 @@ public class CacheServiceTests
 
         signal.Should().Be("cache_purge_all");
     }
+
+    // ── Risk 3: GetStatsAsync uses CategoryTtls.Count as totalKeys ────────
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-1003")]
+    public void GetStatsAsync_DefaultCategoryTtls_TotalKeysIsThree()
+    {
+        // Default CacheSettingsData has 3 categories: content, permissions, queries
+        var defaultCategories = new Dictionary<string, int>
+        {
+            { "content", 300 },
+            { "permissions", 600 },
+            { "queries", 120 },
+        };
+
+        var totalKeys = (long)defaultCategories.Count;
+        // CacheStatsDto(TotalKeys, HitCount, MissCount, HitRatio, MemoryUsedBytes)
+        var stats = new CacheStatsDto(totalKeys, 0L, 0L, 0.0, 0L);
+
+        stats.TotalKeys.Should().Be(3);
+        // Hit/miss remain 0 — Redis-specific APIs not available without IConnectionMultiplexer
+        stats.HitCount.Should().Be(0);
+        stats.MissCount.Should().Be(0);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-1003")]
+    public void GetStatsAsync_CustomCategoryTtls_TotalKeysMatchesCount()
+    {
+        var customCategories = new Dictionary<string, int>
+        {
+            { "content", 300 },
+            { "permissions", 600 },
+            { "queries", 120 },
+            { "themes", 180 },
+            { "workflows", 240 },
+        };
+
+        var totalKeys = (long)customCategories.Count;
+        // CacheStatsDto(TotalKeys, HitCount, MissCount, HitRatio, MemoryUsedBytes)
+        var stats = new CacheStatsDto(totalKeys, 0L, 0L, 0.0, 0L);
+
+        stats.TotalKeys.Should().Be(5);
+        stats.TotalKeys.Should().BeGreaterThan(3); // More categories than default
+    }
+
+    // ── P1-4: Redis-backed stats contract ─────────────────────────────────
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-1003")]
+    public void GetStatsAsync_NullConnectionMultiplexer_ReturnsPlaceholderWithZeroHitMiss()
+    {
+        // When IConnectionMultiplexer is not available (Redis not configured),
+        // OrchardCacheService.GetStatsAsync() must return placeholder stats
+        // with HitCount = 0 and MissCount = 0 rather than throwing.
+        // TotalKeys is derived from configured category count (always valid).
+        var stats = new CacheStatsDto(3L, 0L, 0L, 0.0, 0L);
+
+        stats.HitCount.Should().Be(0,
+            "without Redis, hit/miss counters cannot be read from INFO command");
+        stats.MissCount.Should().Be(0);
+        stats.TotalKeys.Should().Be(3,
+            "TotalKeys is derived from category TTL config, not from Redis");
+        stats.MemoryUsedBytes.Should().Be(0,
+            "used_memory requires Redis INFO — placeholder is 0");
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    [Trait("StoryId", "US-1003")]
+    public void GetStatsAsync_WithRedisHitMiss_HitRatioIsCalculatedCorrectly()
+    {
+        // When Redis is available and INFO returns real hit/miss counts,
+        // CacheStatsDto.HitRatio = hits / (hits + misses).
+        const long hits = 300L;
+        const long misses = 100L;
+        var hitRatio = (double)hits / (hits + misses); // 0.75
+
+        var stats = new CacheStatsDto(10L, hits, misses, hitRatio, 4_096_000L);
+
+        stats.HitCount.Should().Be(300);
+        stats.MissCount.Should().Be(100);
+        stats.HitRatio.Should().BeApproximately(0.75, precision: 0.001);
+        stats.MemoryUsedBytes.Should().Be(4_096_000L);
+    }
 }

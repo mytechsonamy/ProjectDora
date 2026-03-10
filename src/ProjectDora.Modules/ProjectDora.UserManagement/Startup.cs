@@ -13,6 +13,11 @@ public sealed class Startup : StartupBase
     {
         services.AddScoped<INavigationProvider, UserManagementMenu>();
         services.AddScoped<IPermissionProvider, Permissions>();
+        // GeneratedPermissionProvider feeds ISiteService-persisted dynamic permissions
+        // (content-type and query permissions) into OC's authorization pipeline.
+        // Without this registration, GenerateContentTypePermissionsAsync() persists data
+        // that is never evaluated by IAuthorizationService.
+        services.AddScoped<IPermissionProvider, GeneratedPermissionProvider>();
         services.AddScoped<IUserService, OrchardUserService>();
         services.AddScoped<ProjectDora.Core.Abstractions.IRoleService, OrchardRoleService>();
         services.AddScoped<IAuthService, OrchardAuthService>();

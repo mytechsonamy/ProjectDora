@@ -104,12 +104,36 @@ public sealed class OrchardWorkflowService : IWorkflowService
         }
 
         var input = context ?? new Dictionary<string, object>();
-        await _workflowManager.TriggerEventAsync(
+
+        // OC TriggerEventAsync returns WorkflowExecutionContext instances for each workflow
+        // that handled the event. Each context carries the persisted Workflow record with its Id.
+        var executionContexts = await _workflowManager.TriggerEventAsync(
             "Signal",
             input,
             correlationId: workflowId);
 
-        return Guid.NewGuid().ToString();
+        // Happy path: OC created a persisted Workflow record — return its database Id.
+        // This Id is queryable via GetExecutionAsync(executionId).
+        var firstContext = executionContexts?.FirstOrDefault();
+        if (firstContext?.Workflow is not null)
+        {
+            return firstContext.Workflow.Id.ToString(CultureInfo.InvariantCulture);
+        }
+
+        // No persisted execution record was created. This happens when:
+        //   (a) the Signal event matched no active workflow instances, or
+        //   (b) the workflow executed fully in-memory without a persistence step.
+        //
+        // We do NOT fall back to a random UUID — that would create a misleading handle
+        // that GetExecutionAsync would silently return null for, hiding the real state.
+        //
+        // Instead, return a "trace:" prefixed marker so callers know:
+        //   - The signal was dispatched successfully.
+        //   - There is no persisted execution record to query.
+        //   - GetExecutionAsync(returnedId) will return null — by design, not a bug.
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"trace:{workflowId}:{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
     }
 
     public async Task<WorkflowExecutionDto?> GetExecutionAsync(string executionId)

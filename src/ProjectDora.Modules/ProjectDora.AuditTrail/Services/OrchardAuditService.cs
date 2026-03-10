@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using OrchardCore.AuditTrail.Indexes;
 using OrchardCore.AuditTrail.Models;
@@ -152,18 +153,30 @@ public sealed class OrchardAuditService : IAuditService
 
         var changes = new List<FieldDiffEntry>();
 
-        if (fromItem.DisplayText != toItem.DisplayText)
+        var comparisons = new[]
         {
-            changes.Add(new FieldDiffEntry("DisplayText", "Modified", fromItem.DisplayText, toItem.DisplayText));
-        }
+            ("DisplayText",  fromItem.DisplayText,
+                             toItem.DisplayText),
+            ("Status",       fromItem.Status,
+                             toItem.Status),
+            ("Version",      fromItem.Version.ToString(CultureInfo.InvariantCulture),
+                             toItem.Version.ToString(CultureInfo.InvariantCulture)),
+            ("Owner",        fromItem.Owner,
+                             toItem.Owner),
+            ("Culture",      fromItem.Culture ?? string.Empty,
+                             toItem.Culture ?? string.Empty),
+            ("ContentType",  fromItem.ContentType,
+                             toItem.ContentType),
+            ("PublishedUtc", fromItem.PublishedUtc?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty,
+                             toItem.PublishedUtc?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty),
+        };
 
-        if (fromItem.Status != toItem.Status)
+        foreach (var (field, from, to) in comparisons)
         {
-            changes.Add(new FieldDiffEntry(
-                "Status",
-                "Modified",
-                fromItem.Status,
-                toItem.Status));
+            if (from != to)
+            {
+                changes.Add(new FieldDiffEntry(field, "Modified", from, to));
+            }
         }
 
         return new ContentDiffDto(contentItemId, fromVersion, toVersion, changes);

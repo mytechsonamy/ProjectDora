@@ -9,6 +9,7 @@
     <PackageReference Include="OrchardCore.Navigation.Core" Version="2.1.4" />
     <PackageReference Include="OrchardCore.Users.Core" Version="2.1.4" />
     <PackageReference Include="OrchardCore.Roles.Core" Version="2.1.4" />
+    <PackageReference Include="OrchardCore.Settings" Version="2.1.4" />
   </ItemGroup>
 
   <PropertyGroup>

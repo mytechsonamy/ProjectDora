@@ -8,10 +8,12 @@ namespace ProjectDora.QueryEngine.Services;
 public sealed class OrchardQueryService : IQueryService
 {
     private readonly IQueryManager _queryManager;
+    private readonly ILuceneIndexRebuilder? _luceneIndexRebuilder;
 
-    public OrchardQueryService(IQueryManager queryManager)
+    public OrchardQueryService(IQueryManager queryManager, ILuceneIndexRebuilder? luceneIndexRebuilder = null)
     {
         _queryManager = queryManager;
+        _luceneIndexRebuilder = luceneIndexRebuilder;
     }
 
     public async Task<QueryResultDto> ExecuteLuceneAsync(LuceneQueryRequest request)
@@ -21,11 +23,8 @@ public sealed class OrchardQueryService : IQueryService
         var query = await _queryManager.NewAsync("Lucene", tempName);
         if (query is null)
         {
-            // Lucene module not enabled — return empty result
-            return new QueryResultDto(
-                Array.Empty<string>(),
-                Array.Empty<IDictionary<string, object>>(),
-                0, 0, "Lucene");
+            throw new InvalidOperationException(
+                "Query type 'Lucene' is not available. Ensure the OrchardCore.Search.Lucene module is enabled.");
         }
 
         // Set LuceneQuery-specific properties via reflection (available when Lucene module is loaded)
@@ -68,11 +67,8 @@ public sealed class OrchardQueryService : IQueryService
         var query = await _queryManager.NewAsync("Sql", tempName);
         if (query is null)
         {
-            // SQL query module not enabled — return empty result
-            return new QueryResultDto(
-                Array.Empty<string>(),
-                Array.Empty<IDictionary<string, object>>(),
-                0, 0, "SQL");
+            throw new InvalidOperationException(
+                "Query type 'Sql' is not available. Ensure the OrchardCore.Queries.Sql module is enabled.");
         }
 
         // Set SqlQuery-specific properties via reflection (available when SQL query module is loaded)
@@ -196,11 +192,18 @@ public sealed class OrchardQueryService : IQueryService
             query.Source);
     }
 
-    public Task ReindexAsync(string? contentType = null)
+    public async Task ReindexAsync(string? contentType = null)
     {
-        // Requires OrchardCore.Search.Lucene runtime — index rebuild dispatched via event
-        // ILuceneIndexManager.RebuildAsync() would be used here when the module is enabled
-        return Task.CompletedTask;
+        if (_luceneIndexRebuilder is null)
+        {
+            throw new InvalidOperationException(
+                "Lucene search module is not enabled in this deployment. Cannot perform index rebuild.");
+        }
+
+        foreach (var indexName in _luceneIndexRebuilder.ListIndexNames())
+        {
+            await _luceneIndexRebuilder.RebuildAsync(indexName);
+        }
     }
 
     private static QueryResultDto BuildResult(
