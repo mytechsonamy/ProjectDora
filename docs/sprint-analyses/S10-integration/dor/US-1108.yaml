@@ -1,0 +1,31 @@
+id: US-1108
+title: Integration Admin Menu and Permission Registration
+sprint: S10
+spec: 4.1.11 (module registration)
+status: done
+
+description: |
+  As a platform engineer, I want the Integration module to register its admin menu
+  items and permissions so that the module participates in the platform's RBAC and
+  navigation system.
+
+acceptance_criteria:
+  - given: Integration module is loaded
+    when: admin navigates to Admin Panel
+    then: "Integration" menu item appears at position 8.0
+  - given: Permissions() provider is instantiated
+    when: GetPermissionsAsync() is called
+    then: returns 6 permissions (AccessHeadlessApi, ManageApiClients, RegisterWebhooks, ViewApiLogs, ManageWebhooks, ExecutePublishedQueries)
+  - given: GetDefaultStereotypes() is called
+    when: Administrator stereotype requested
+    then: Administrator stereotype includes all 6 permissions
+  - given: ManageApiClients permission
+    when: IsSecurityCritical checked
+    then: true (API key management is security-critical)
+
+implementation:
+  classes:
+    - ProjectDora.Integration.Permissions
+    - ProjectDora.Integration.IntegrationMenu
+    - ProjectDora.Integration.Services.OrchardIntegrationService
+  test_file: tests/ProjectDora.Modules.Tests/Integration/

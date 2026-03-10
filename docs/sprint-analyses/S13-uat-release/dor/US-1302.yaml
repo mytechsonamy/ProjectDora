@@ -1,0 +1,24 @@
+id: US-1302
+title: Administrator Stereotype Coverage
+sprint: S13
+spec: UAT — RBAC stereotype validation
+status: done
+
+description: |
+  As a QA engineer, I want to verify that every module defines an Administrator
+  stereotype so that initial platform setup grants full access without manual
+  permission assignment.
+
+acceptance_criteria:
+  - given: all 10 IPermissionProvider instances
+    when: GetDefaultStereotypes() is called on each
+    then: every provider includes a stereotype with Name == "Administrator"
+  - given: Administrator stereotype for each provider
+    when: Permissions count is compared to provider's total permission count
+    then: Administrator has exactly all permissions (no subset, no extras)
+
+implementation:
+  test_file: tests/ProjectDora.Modules.Tests/Uat/ModuleRegistrationTests.cs
+  test_methods:
+    - Uat_Modules_AllProvidersSupportAdministratorStereotype
+    - Uat_Modules_AdministratorHasAllPermissionsForEachModule

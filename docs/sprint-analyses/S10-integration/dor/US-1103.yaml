@@ -1,0 +1,32 @@
+id: US-1103
+title: Published Query Endpoints
+sprint: S10
+spec: 4.1.11.4
+status: done
+
+description: |
+  As an administrator, I want to publish saved queries as REST endpoints so that
+  common data access patterns can be exposed as APIs without custom controller code.
+
+acceptance_criteria:
+  - given: admin publishes a query via IIntegrationService.PublishQueryApiAsync(command)
+    when: query name is valid and query exists in QueryEngine
+    then: endpoint becomes available at GET /api/queries/{queryName}
+  - given: GET /api/queries/{queryName}?param=value
+    when: query is parameterized
+    then: returns query results with param substituted
+  - given: admin unpublishes a query endpoint
+    when: endpoint was published
+    then: GET /api/queries/{queryName} returns 404
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.IIntegrationService
+  method: PublishQueryApiAsync(PublishQueryApiCommand)
+  notes: Leverages QueryEngine (S04) IQueryService.ExecuteAsync() for data retrieval.
+
+permissions_required:
+  - ManageQueryEndpoints (via ManageApiClients)
+
+dependencies:
+  - S04 (QueryEngine — queries must exist before they can be published)
+  - US-1101 (API key auth must be in place)

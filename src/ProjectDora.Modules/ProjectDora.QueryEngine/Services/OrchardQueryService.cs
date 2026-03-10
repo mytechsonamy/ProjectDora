@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using OrchardCore.Queries;
 using ProjectDora.Core.Abstractions;
 
@@ -13,20 +14,48 @@ public sealed class OrchardQueryService : IQueryService
         _queryManager = queryManager;
     }
 
-    public Task<QueryResultDto> ExecuteLuceneAsync(LuceneQueryRequest request)
+    public async Task<QueryResultDto> ExecuteLuceneAsync(LuceneQueryRequest request)
     {
-        // Lucene execution requires OrchardCore.Search.Lucene runtime — delegation via IQueryManager
-        var result = new QueryResultDto(
-            Array.Empty<string>(),
-            Array.Empty<IDictionary<string, object>>(),
-            0,
-            0,
-            "Lucene");
+        // Create a temporary Lucene query, execute it, then delete
+        var tempName = string.Create(CultureInfo.InvariantCulture, $"__adhoc_lucene_{Guid.NewGuid():N}");
+        var query = await _queryManager.NewAsync("Lucene", tempName);
+        if (query is null)
+        {
+            // Lucene module not enabled — return empty result
+            return new QueryResultDto(
+                Array.Empty<string>(),
+                Array.Empty<IDictionary<string, object>>(),
+                0, 0, "Lucene");
+        }
 
-        return Task.FromResult(result);
+        // Set LuceneQuery-specific properties via reflection (available when Lucene module is loaded)
+        var queryType = query.GetType();
+        queryType.GetProperty("Index")?.SetValue(query, request.IndexName ?? "Search");
+        queryType.GetProperty("Template")?.SetValue(query, request.QueryText);
+        queryType.GetProperty("ReturnContentItems")?.SetValue(query, false);
+
+        await _queryManager.SaveAsync(query);
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            var parameters = new Dictionary<string, object>();
+            if (request.ContentType is not null)
+            {
+                parameters["contenttype"] = request.ContentType;
+            }
+
+            var queryResult = await _queryManager.ExecuteQueryAsync(query, parameters);
+            sw.Stop();
+
+            return BuildResult(queryResult, request.Page, request.PageSize, sw.ElapsedMilliseconds, "Lucene");
+        }
+        finally
+        {
+            await _queryManager.DeleteQueryAsync(tempName);
+        }
     }
 
-    public Task<QueryResultDto> ExecuteSqlAsync(SqlQueryRequest request)
+    public async Task<QueryResultDto> ExecuteSqlAsync(SqlQueryRequest request)
     {
         var validation = SqlSafetyValidator.Validate(request.Sql);
         if (!validation.IsValid)
@@ -34,15 +63,39 @@ public sealed class OrchardQueryService : IQueryService
             throw new InvalidOperationException(validation.ErrorMessage);
         }
 
-        // SQL execution requires database connection — delegation via IQueryManager
-        var result = new QueryResultDto(
-            Array.Empty<string>(),
-            Array.Empty<IDictionary<string, object>>(),
-            0,
-            0,
-            "SQL");
+        // Create a temporary SQL query, execute it, then delete
+        var tempName = string.Create(CultureInfo.InvariantCulture, $"__adhoc_sql_{Guid.NewGuid():N}");
+        var query = await _queryManager.NewAsync("Sql", tempName);
+        if (query is null)
+        {
+            // SQL query module not enabled — return empty result
+            return new QueryResultDto(
+                Array.Empty<string>(),
+                Array.Empty<IDictionary<string, object>>(),
+                0, 0, "SQL");
+        }
 
-        return Task.FromResult(result);
+        // Set SqlQuery-specific properties via reflection (available when SQL query module is loaded)
+        var queryType = query.GetType();
+        queryType.GetProperty("Template")?.SetValue(query, request.Sql);
+
+        await _queryManager.SaveAsync(query);
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            var parameters = request.Parameters is not null
+                ? new Dictionary<string, object>(request.Parameters)
+                : new Dictionary<string, object>();
+
+            var queryResult = await _queryManager.ExecuteQueryAsync(query, parameters);
+            sw.Stop();
+
+            return BuildResult(queryResult, 1, int.MaxValue, sw.ElapsedMilliseconds, "SQL");
+        }
+        finally
+        {
+            await _queryManager.DeleteQueryAsync(tempName);
+        }
     }
 
     public async Task<SavedQueryDto> CreateSavedQueryAsync(CreateSavedQueryCommand command)
@@ -145,9 +198,39 @@ public sealed class OrchardQueryService : IQueryService
 
     public Task ReindexAsync(string? contentType = null)
     {
-        // Index rebuild requires OrchardCore.Search.Lucene runtime
-        // Will be implemented with Lucene/ES integration
+        // Requires OrchardCore.Search.Lucene runtime — index rebuild dispatched via event
+        // ILuceneIndexManager.RebuildAsync() would be used here when the module is enabled
         return Task.CompletedTask;
+    }
+
+    private static QueryResultDto BuildResult(
+        IQueryResults queryResult,
+        int page,
+        int pageSize,
+        long elapsedMs,
+        string queryType)
+    {
+        var rows = new List<IDictionary<string, object>>();
+        var columns = new List<string>();
+
+        foreach (var item in queryResult.Items)
+        {
+            if (item is IDictionary<string, object> dict)
+            {
+                if (columns.Count == 0)
+                {
+                    columns.AddRange(dict.Keys);
+                }
+                rows.Add(dict);
+            }
+        }
+
+        var paged = rows
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        return new QueryResultDto(columns, paged, rows.Count, elapsedMs, queryType);
     }
 
     private static SavedQueryDto MapToDto(

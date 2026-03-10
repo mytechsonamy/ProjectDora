@@ -52,14 +52,35 @@ public sealed class OrchardUserService : IUserService
 
     public Task<PagedResult<UserDto>> ListAsync(ListUsersQuery query)
     {
-        // Full implementation requires YesSql ISession with UserIndex for paginated queries
-        var result = new PagedResult<UserDto>(
-            Array.Empty<UserDto>(),
-            0,
-            query.Page,
-            query.PageSize);
+        IEnumerable<User> users = _userManager.Users.OfType<User>();
 
-        return Task.FromResult(result);
+        if (query.Enabled.HasValue)
+        {
+            users = users.Where(u => u.IsEnabled == query.Enabled.Value);
+        }
+
+        if (!string.IsNullOrEmpty(query.SearchTerm))
+        {
+            users = users.Where(u =>
+                (u.UserName?.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                (u.Email?.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase) == true));
+        }
+
+        if (!string.IsNullOrEmpty(query.Role))
+        {
+            users = users.Where(u =>
+                u.RoleNames?.Contains(query.Role, StringComparer.OrdinalIgnoreCase) == true);
+        }
+
+        var list = users.ToList();
+        var total = list.Count;
+        var paged = list
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .Select(MapToDto)
+            .ToList();
+
+        return Task.FromResult(new PagedResult<UserDto>(paged, total, query.Page, query.PageSize));
     }
 
     public async Task<UserDto> UpdateAsync(string userId, UpdateUserCommand command)

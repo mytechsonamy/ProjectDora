@@ -1,0 +1,33 @@
+id: US-1102
+title: GraphQL API (Hot Chocolate)
+sprint: S10
+spec: 4.1.11.3
+status: done
+
+description: |
+  As a developer, I want to query content via GraphQL so that I can fetch exactly
+  the fields I need in a single request, reducing over-fetching.
+
+acceptance_criteria:
+  - given: POST /graphql with valid query and API key
+    when: content types are registered
+    then: GraphQL resolves content items and returns requested fields
+  - given: GraphQL introspection query
+    when: sent to /graphql
+    then: returns schema definition including all registered content types
+  - given: GraphQL query with nested content part fields
+    when: part has sub-fields
+    then: returns full nested object graph
+
+implementation:
+  framework: Hot Chocolate (ChilliCream)
+  schema_source: Auto-generated from IContentDefinitionManager registered content types
+  notes: >
+    Hot Chocolate schema dynamically reflects Orchard Core content types.
+    GraphQL endpoint secured with same API key mechanism as REST.
+
+permissions_required:
+  - AccessHeadlessApi (IsSecurityCritical: false)
+
+dependencies:
+  - US-1101 (API key infrastructure must be in place)

@@ -1,0 +1,18 @@
+id: US-1304
+title: No Module Has Zero Permissions
+sprint: S13
+spec: UAT — RBAC completeness gate
+status: done
+
+description: |
+  As a QA engineer, I want to verify that no module has an empty permission set
+  so that every module participates in RBAC and cannot be accidentally bypassed.
+
+acceptance_criteria:
+  - given: all 10 IPermissionProvider instances
+    when: GetPermissionsAsync() is called on each
+    then: every provider returns at least one permission (no empty sets)
+
+implementation:
+  test_file: tests/ProjectDora.Modules.Tests/Uat/ModuleRegistrationTests.cs
+  test_method: Uat_Modules_NoModuleHasZeroPermissions

@@ -128,7 +128,6 @@ TenantDto
 | `IQueryService` | Queries are separate |
 | `IWorkflowService` | Emits events; workflow engine reacts |
 | `IRoleService` | Permission checks via `IAuthService` middleware |
-| AI interfaces | AI modules are separate |
 | `ContentType` definition tables | Read via `IContentTypeService` |
 
 **Domain Events Emitted:**
@@ -183,7 +182,6 @@ TenantDto
 | `IContentService` | Content is separate |
 | `IQueryService` | Queries are separate |
 | `IWorkflowService` | Workflows are separate |
-| AI interfaces | AI is separate |
 
 **Special Rules:**
 - Password hashing: bcrypt only (no MD5, SHA)
@@ -212,7 +210,6 @@ TenantDto
 |---------------|--------|
 | `IContentTypeService` | Content modeling is separate |
 | `IQueryService` | Queries are separate |
-| AI interfaces | AI is separate |
 | Database directly | Must use service interfaces for all data access |
 
 **Special Rules:**

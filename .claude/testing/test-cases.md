@@ -510,6 +510,6 @@ This document catalogs all planned test cases for ProjectDora, mapped to modules
 ## 16. Cross-References
 
 - **Test Strategy**: [test-strategy.md](test-strategy.md) — pyramid percentages, coverage targets, naming convention
-- **Golden Dataset**: [golden-dataset.md](golden-dataset.md) — fixture data referenced by integration and AI tests
+- **Golden Dataset**: [golden-dataset.md](golden-dataset.md) — fixture data referenced by integration and E2E tests
 - **DoR Template**: [definition-of-ready.md](../ai-sdlc/definition-of-ready.md) — acceptance tests flow into this registry
 - **Governance**: [governance.md](../ai-sdlc/governance.md) — Test Architect agent generates tests from this registry

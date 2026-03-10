@@ -1,0 +1,40 @@
+id: US-1201
+title: SQL Safety Validator
+sprint: S12
+spec: 4.1.5.8 (derived — SQL query security gate)
+status: done
+
+description: |
+  As a security engineer, I want all user-submitted SQL queries validated before
+  execution so that SQL injection and destructive operations are prevented.
+
+acceptance_criteria:
+  - given: SQL containing DROP, DELETE, INSERT, UPDATE, TRUNCATE, CREATE, ALTER, EXEC, EXECUTE, XP_
+    when: SqlSafetyValidator.Validate(sql) is called
+    then: IsValid = false, ErrorMessage is non-empty
+  - given: empty string
+    when: Validate("") is called
+    then: IsValid = false, ErrorMessage contains "empty"
+  - given: valid SELECT or SELECT...WITH query
+    when: Validate(sql) is called
+    then: IsValid = true
+  - given: UNION-based SELECT
+    when: Validate(sql) is called
+    then: IsValid = true (UNION is allowed; injection prevention relies on parameterized queries)
+
+implementation:
+  class: ProjectDora.QueryEngine.Services.SqlSafetyValidator
+  pattern: static Validate(string sql) → ValidationResult
+  approach: >
+    Keyword blacklist for destructive operations (case-insensitive regex).
+    Null/empty check. No SQL parsing — simple but effective for this use case.
+    Parameterized queries provide the actual injection defense.
+
+test_file: tests/ProjectDora.Modules.Tests/Security/SqlInjectionTests.cs
+test_ids:
+  - Security_Sql_ForbiddenKeyword_Rejected (3 cases)
+  - Security_Sql_DmlAndExec_Rejected (4 cases)
+  - Security_Sql_ValidSelectQuery_Accepted (3 cases)
+  - Security_Sql_EmptyQuery_Rejected
+  - Security_Sql_UnionBasedInjection_Rejected
+  - Security_Sql_TruncateWithCreate_Rejected

@@ -1,0 +1,35 @@
+id: US-1105
+title: Webhook Registration and Delivery
+sprint: S10
+spec: 4.1.11.6
+status: done
+
+description: |
+  As a developer, I want to register webhooks so that my application is notified
+  when platform events occur (content published, user created, etc.).
+
+acceptance_criteria:
+  - given: developer registers webhook via RegisterWebhookAsync(command)
+    when: command has valid URL and event types
+    then: WebhookDto created; webhook active
+  - given: content item is published
+    when: webhook is registered for "content.published" event
+    then: HTTP POST sent to webhook URL with event payload within 5 seconds
+  - given: webhook delivery fails (HTTP 5xx or timeout)
+    when: retry policy applies
+    then: 3 retries attempted (5s, 30s, 5min backoff); failure logged to audit trail
+  - given: developer lists webhook delivery history
+    when: deliveries exist
+    then: shows attempt count, last status, and last error message
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.IIntegrationService
+  methods:
+    - RegisterWebhookAsync
+    - ListWebhooksAsync
+    - DeactivateWebhookAsync
+  retry: 3 attempts, exponential backoff (5s → 30s → 5min)
+  notes: Retry handled by background IHostedService. Failed deliveries logged via IAuditService.
+
+permissions_required:
+  - ManageWebhooks (via ManageApiClients scope)

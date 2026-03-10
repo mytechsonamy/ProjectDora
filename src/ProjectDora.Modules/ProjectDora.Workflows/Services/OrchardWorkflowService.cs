@@ -9,13 +9,16 @@ public sealed class OrchardWorkflowService : IWorkflowService
 {
     private readonly IWorkflowTypeStore _workflowTypeStore;
     private readonly IWorkflowManager _workflowManager;
+    private readonly IWorkflowStore _workflowStore;
 
     public OrchardWorkflowService(
         IWorkflowTypeStore workflowTypeStore,
-        IWorkflowManager workflowManager)
+        IWorkflowManager workflowManager,
+        IWorkflowStore workflowStore)
     {
         _workflowTypeStore = workflowTypeStore;
         _workflowManager = workflowManager;
+        _workflowStore = workflowStore;
     }
 
     public async Task<WorkflowDefDto> CreateAsync(CreateWorkflowCommand command)
@@ -109,21 +112,30 @@ public sealed class OrchardWorkflowService : IWorkflowService
         return Guid.NewGuid().ToString();
     }
 
-    public Task<WorkflowExecutionDto?> GetExecutionAsync(string executionId)
+    public async Task<WorkflowExecutionDto?> GetExecutionAsync(string executionId)
     {
-        // Execution retrieval requires IWorkflowStore
-        return Task.FromResult<WorkflowExecutionDto?>(null);
+        var id = long.Parse(executionId, CultureInfo.InvariantCulture);
+        var workflow = await _workflowStore.GetAsync(id);
+        return workflow is null ? null : MapExecutionToDto(workflow);
     }
 
-    public Task<PagedResult<WorkflowExecutionDto>> ListExecutionsAsync(ListExecutionsQuery query)
+    public async Task<PagedResult<WorkflowExecutionDto>> ListExecutionsAsync(ListExecutionsQuery query)
     {
-        var result = new PagedResult<WorkflowExecutionDto>(
-            Array.Empty<WorkflowExecutionDto>(),
-            0,
-            query.Page,
-            query.PageSize);
+        var workflowTypeId = long.Parse(query.WorkflowId, CultureInfo.InvariantCulture);
+        var workflowType = await _workflowTypeStore.GetAsync(workflowTypeId);
+        if (workflowType is null)
+        {
+            return new PagedResult<WorkflowExecutionDto>(
+                Array.Empty<WorkflowExecutionDto>(), 0, query.Page, query.PageSize);
+        }
 
-        return Task.FromResult(result);
+        var skip = (query.Page - 1) * query.PageSize;
+        var workflows = await _workflowStore.ListAsync(
+            workflowType.WorkflowTypeId, skip: skip, take: query.PageSize);
+        var total = await _workflowStore.CountAsync(workflowType.WorkflowTypeId);
+
+        var dtos = workflows.Select(MapExecutionToDto).ToList();
+        return new PagedResult<WorkflowExecutionDto>(dtos, total, query.Page, query.PageSize);
     }
 
     private static WorkflowDefDto MapToDto(
@@ -140,5 +152,22 @@ public sealed class OrchardWorkflowService : IWorkflowService
             transitions ?? Array.Empty<WorkflowTransitionDto>(),
             DateTime.UtcNow,
             DateTime.UtcNow);
+    }
+
+    private static WorkflowExecutionDto MapExecutionToDto(Workflow workflow)
+    {
+        var isFinished = workflow.Status == WorkflowStatus.Finished;
+        var isFaulted = workflow.Status == WorkflowStatus.Faulted;
+
+        return new WorkflowExecutionDto(
+            workflow.Id.ToString(CultureInfo.InvariantCulture),
+            workflow.WorkflowTypeId.ToString(CultureInfo.InvariantCulture),
+            string.Empty,
+            workflow.Status.ToString(),
+            workflow.CorrelationId,
+            workflow.CreatedUtc,
+            isFinished || isFaulted ? workflow.CreatedUtc : null,
+            isFaulted ? "Workflow faulted" : null,
+            null);
     }
 }

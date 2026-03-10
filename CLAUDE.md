@@ -11,7 +11,7 @@ A data orchestration platform for KOSGEB (Turkish SME development agency). The p
 ## Architecture
 
 - **Pattern**: Modular Monolith (ADR-001) — single .NET process, module boundaries via interfaces
-- **Core Framework**: Orchard Core CMS on .NET 8
+- **Core Framework**: Orchard Core CMS 2.1.4 on .NET 10
 - **Abstraction Layer**: IContentService, IQueryService, IWorkflowService, IAuthService — isolates Orchard Core dependency
 - **API Style**: REST + GraphQL (Hot Chocolate), Headless CMS support
 - **Design**: Clean Architecture + CQRS/MediatR
@@ -20,7 +20,7 @@ A data orchestration platform for KOSGEB (Turkish SME development agency). The p
 
 | Layer | Technology |
 |-------|-----------|
-| Runtime | .NET 8 (C#) |
+| Runtime | .NET 10 (C#) |
 | CMS | Orchard Core |
 | Database | PostgreSQL (primary), SQLite (small deployments) |
 | Cache | Redis |
@@ -88,12 +88,17 @@ ProjectDora/
 ├── src/
 │   ├── ProjectDora.Web/           # Main Orchard Core web application
 │   ├── ProjectDora.Core/          # Shared domain models, interfaces, abstractions
-│   └── ProjectDora.Modules/       # Custom Orchard Core modules
+│   └── ProjectDora.Modules/       # Custom Orchard Core modules (one per sprint)
+│       ├── ProjectDora.AdminPanel/
 │       ├── ProjectDora.ContentModeling/
 │       ├── ProjectDora.AuditTrail/
 │       ├── ProjectDora.Workflows/
 │       ├── ProjectDora.QueryEngine/
-│       └── ProjectDora.Integration/
+│       ├── ProjectDora.UserManagement/
+│       ├── ProjectDora.Localization/
+│       ├── ProjectDora.Infrastructure/
+│       ├── ProjectDora.Integration/
+│       └── ProjectDora.ThemeManagement/
 ├── tests/
 │   ├── ProjectDora.Core.Tests/
 │   └── ProjectDora.Modules.Tests/

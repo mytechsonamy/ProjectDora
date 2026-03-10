@@ -1,0 +1,37 @@
+id: US-1002
+title: Redis Cache Layer
+sprint: S09
+spec: 4.1.10.3, 4.1.10.4
+status: done
+
+description: |
+  As a platform engineer, I want high-frequency queries cached in Redis so that
+  database load is reduced and response times are improved.
+
+acceptance_criteria:
+  - given: ICacheService.GetOrSetAsync(key, factory, ttl) is called
+    when: key not in cache
+    then: factory is invoked; result stored in Redis with given TTL
+  - given: ICacheService.GetOrSetAsync(key, factory, ttl) is called
+    when: key is in cache
+    then: factory is NOT invoked; cached value returned
+  - given: ICacheService.InvalidateAsync(key) is called
+    when: key exists in cache
+    then: cache entry removed immediately
+  - given: ICacheService.GetStatsAsync() is called
+    then: returns hit count, miss count, memory usage
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.ICacheService
+  implementation: ProjectDora.Infrastructure.Services.OrchardCacheService
+  backend: IDistributedCache (Redis via Microsoft.Extensions.Caching.StackExchangeRedis)
+  ttl_defaults:
+    content_listings: 5min
+    permission_lookups: 15min
+    query_results: 2min
+
+permissions_required:
+  - PurgeCache (IsSecurityCritical: true)
+
+dependencies:
+  - Docker Redis service must be running

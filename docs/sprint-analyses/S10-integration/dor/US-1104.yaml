@@ -1,0 +1,37 @@
+id: US-1104
+title: API Client Management
+sprint: S10
+spec: 4.1.11.5
+status: done
+
+description: |
+  As an administrator, I want to create and manage API clients (API keys) so that
+  third-party applications can authenticate with the headless API.
+
+acceptance_criteria:
+  - given: admin calls CreateApiClientAsync(command)
+    when: command has valid name and scopes
+    then: new ApiClientDto returned with ClientId and one-time-visible ClientSecret
+  - given: admin lists API clients
+    when: clients exist
+    then: all clients shown; ClientSecret NOT included (only ClientId and metadata)
+  - given: admin revokes an API client (IsActive = false)
+    when: revoked client sends request
+    then: API returns 401 Unauthorized
+  - given: API client has expired expiry date
+    when: request is made
+    then: API returns 401 Unauthorized
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.IIntegrationService
+  methods:
+    - CreateApiClientAsync
+    - ListApiClientsAsync
+    - RevokeApiClientAsync
+  notes: >
+    ClientSecret hashed with BCrypt before storage.
+    Only returned in plain text once at creation time.
+    Scopes: ["content:read", "content:write", "queries:execute", "webhooks:register"]
+
+permissions_required:
+  - ManageApiClients (IsSecurityCritical: true)

@@ -1,0 +1,34 @@
+id: US-1001
+title: Multi-Tenant Shell Provisioning
+sprint: S09
+spec: 4.1.10.1, 4.1.10.2
+status: done
+
+description: |
+  As a platform operator, I want to create and manage isolated tenants so that
+  multiple organizations can use the platform independently without data bleed.
+
+acceptance_criteria:
+  - given: operator calls ITenantService.CreateAsync(command)
+    when: command has valid name and schema prefix
+    then: new OC Shell is provisioned with isolated DB schema and DI container
+  - given: tenant A's data is written
+    when: tenant B queries the same content type
+    then: tenant B sees no data from tenant A
+  - given: operator lists tenants
+    when: multiple tenants exist
+    then: ITenantService.ListAsync() returns all tenant summaries
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.ITenantService
+  implementation: ProjectDora.Infrastructure.Services.OrchardTenantService
+  key_apis:
+    - IShellHost (OC Shell management)
+    - IShellSettingsManager (tenant settings persistence)
+  notes: Tenant isolation is schema-level in PostgreSQL (each tenant gets its own schema prefix).
+
+permissions_required:
+  - ManageTenants (IsSecurityCritical: true)
+
+dependencies:
+  - S01 through S08 must be complete (infrastructure wraps all prior modules)

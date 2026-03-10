@@ -1,0 +1,36 @@
+id: US-404
+title: Per-Tenant Theme Isolation
+sprint: S11
+spec: 4.1.4.6
+status: done
+
+description: |
+  As a platform operator, I want each tenant to have its own independent theme
+  selection and template customizations so that tenant A's branding does not
+  affect tenant B.
+
+acceptance_criteria:
+  - given: tenant A activates Theme X
+    when: tenant B admin views Theme Management
+    then: tenant B still has its own previously active theme (no bleed from tenant A)
+  - given: tenant A customizes a template in Theme X
+    when: tenant B views the same template
+    then: tenant B sees the unmodified original (customizations are tenant-scoped)
+  - given: SuperAdmin views theme settings across tenants
+    when: listing tenants
+    then: each tenant's active theme is independently reported
+
+implementation:
+  notes: >
+    Tenant isolation handled by Orchard Core Shell system (each tenant = separate DI container,
+    separate DB connection, separate IFileStore scope). ThemeService implementation
+    operates within the current Shell context — no explicit tenant ID needed.
+
+permissions_required:
+  - ManageThemes (within tenant scope)
+
+test_ids:
+  - US-406-01
+
+dependencies:
+  - S09 (Infrastructure — multi-tenant Shell system must be operational)

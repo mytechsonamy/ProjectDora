@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using OrchardCore.Security;
 using OrchardCore.Security.Permissions;
+using OrchardCore.Users;
 using ProjectDora.Core.Abstractions;
 
 namespace ProjectDora.UserManagement.Services;
@@ -12,13 +13,16 @@ public sealed class OrchardRoleService : ProjectDora.Core.Abstractions.IRoleServ
 
     private readonly RoleManager<IRole> _roleManager;
     private readonly IEnumerable<IPermissionProvider> _permissionProviders;
+    private readonly UserManager<IUser> _userManager;
 
     public OrchardRoleService(
         RoleManager<IRole> roleManager,
-        IEnumerable<IPermissionProvider> permissionProviders)
+        IEnumerable<IPermissionProvider> permissionProviders,
+        UserManager<IUser> userManager)
     {
         _roleManager = roleManager;
         _permissionProviders = permissionProviders;
+        _userManager = userManager;
     }
 
     public async Task<RoleDto> CreateAsync(CreateRoleCommand command)
@@ -107,16 +111,20 @@ public sealed class OrchardRoleService : ProjectDora.Core.Abstractions.IRoleServ
         }
     }
 
-    public Task AssignRolesToUserAsync(string userId, IEnumerable<string> roleNames)
+    public async Task AssignRolesToUserAsync(string userId, IEnumerable<string> roleNames)
     {
-        // Handled via UserManager in OrchardUserService
-        return Task.CompletedTask;
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new KeyNotFoundException($"User '{userId}' not found.");
+
+        await _userManager.AddToRolesAsync(user, roleNames);
     }
 
-    public Task RevokeRolesFromUserAsync(string userId, IEnumerable<string> roleNames)
+    public async Task RevokeRolesFromUserAsync(string userId, IEnumerable<string> roleNames)
     {
-        // Handled via UserManager in OrchardUserService
-        return Task.CompletedTask;
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new KeyNotFoundException($"User '{userId}' not found.");
+
+        await _userManager.RemoveFromRolesAsync(user, roleNames);
     }
 
     public async Task<IReadOnlyList<PermissionDto>> ListPermissionsAsync()

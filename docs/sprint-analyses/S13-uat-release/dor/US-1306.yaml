@@ -1,0 +1,30 @@
+id: US-1306
+title: Release Readiness Gate
+sprint: S13
+spec: UAT — release qualification
+status: done
+
+description: |
+  As a release manager, I want a final release readiness gate that confirms the
+  platform is structurally sound (all tests pass, zero warnings, all modules registered)
+  before marking the sprint as shippable.
+
+acceptance_criteria:
+  - given: dotnet test tests/ProjectDora.Modules.Tests/
+    when: run in CI
+    then: 0 failures, 0 errors, all tests pass
+  - given: dotnet build src/ProjectDora.Web/
+    when: run in CI
+    then: 0 errors, 0 warnings (TreatWarningsAsErrors=true enforced)
+  - given: all 10 modules registered (US-1301 passed)
+    when: release checklist verified
+    then: version tagged, release notes written, Docker images built
+
+implementation:
+  ci_command: dotnet test tests/ProjectDora.Modules.Tests/
+  build_command: dotnet build src/ProjectDora.Web/
+  release_notes_template: docs/release-management.md
+  notes: >
+    Final state: 238 tests passing, 0 failures, 0 warnings on .NET 10.
+    10 modules: AdminPanel, AuditTrail, ContentModeling, Infrastructure,
+    Integration, Localization, QueryEngine, ThemeManagement, UserManagement, Workflows.

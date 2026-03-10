@@ -1,0 +1,34 @@
+id: US-403
+title: Template Reset to Default
+sprint: S11
+spec: 4.1.4.4
+status: done
+
+description: |
+  As an administrator, I want to reset a customized template back to its original
+  version so that I can undo edits without needing to manually restore the file.
+
+acceptance_criteria:
+  - given: a template has been customized (IsCustomized = true)
+    when: admin clicks "Reset to Default"
+    then: template reverts to theme's original content; IsCustomized = false
+  - given: IThemeService.ResetTemplateAsync(themeId, path) is called
+    when: template was customized
+    then: stored customization is deleted; next GetTemplateAsync returns original content
+  - given: a template has NOT been customized
+    when: admin views template details
+    then: "Reset to Default" button is disabled/hidden
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.IThemeService
+  methods:
+    - ResetTemplateAsync
+
+permissions_required:
+  - ResetTemplates (IsSecurityCritical: false)
+
+test_ids:
+  - US-404-01
+
+dependencies:
+  - US-402 (template editing must exist before reset is meaningful)

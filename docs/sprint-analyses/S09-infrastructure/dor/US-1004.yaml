@@ -1,0 +1,35 @@
+id: US-1004
+title: OpenID Connect Authentication Infrastructure
+sprint: S09
+spec: 4.1.10.7, 4.1.10.22
+status: done
+
+description: |
+  As a platform engineer, I want OpenID Connect authentication configured so that
+  API clients and front-end applications can authenticate via JWT bearer tokens,
+  including offline/local token validation.
+
+acceptance_criteria:
+  - given: client sends JWT bearer token in Authorization header
+    when: token is valid and signed by platform OIDC provider
+    then: request is authenticated; user identity resolved from claims
+  - given: network is unavailable (offline scenario)
+    when: token validation occurs
+    then: validation succeeds using locally cached signing keys
+  - given: invalid or expired token
+    when: sent to protected endpoint
+    then: returns 401 Unauthorized
+
+implementation:
+  notes: >
+    Orchard Core OpenId module provides the OIDC server.
+    Token validation configured with local key caching (no external IdP dependency).
+    Web project pins Microsoft.AspNetCore.Authentication.OpenIdConnect 9.0.0
+    explicitly to resolve transitive downgrade from Microsoft.Identity.Web.
+    NuGetAuditMode=direct set to suppress NU1902/NU1903 warnings.
+
+permissions_required:
+  - ManageOpenId (IsSecurityCritical: true)
+
+dependencies:
+  - S05 (UserManagement — user identities must exist)

@@ -1,0 +1,32 @@
+id: US-1106
+title: Content Write API (Headless CMS Create/Update/Delete)
+sprint: S10
+spec: 4.1.11.2
+status: done
+
+description: |
+  As a developer, I want to create, update, and delete content items via REST API
+  so that external systems can push content into the platform programmatically.
+
+acceptance_criteria:
+  - given: POST /api/content/{contentType} with valid payload and write-scoped API key
+    when: payload matches content type schema
+    then: content item created; returns 201 with content item ID
+  - given: PUT /api/content/{contentType}/{id} with valid payload
+    when: content item exists
+    then: content item updated; returns 200
+  - given: DELETE /api/content/{contentType}/{id}
+    when: content item exists and API key has write scope
+    then: content item deleted; returns 204
+  - given: write request with read-only API key
+    when: scope check occurs
+    then: returns 403 Forbidden
+
+implementation:
+  notes: >
+    Write operations validated via IContentService (S02/S03).
+    All write operations emit audit events via IAuditService.
+    API key scope "content:write" required.
+
+permissions_required:
+  - AccessHeadlessApi + content:write scope on API key

@@ -1,0 +1,22 @@
+id: US-1205
+title: Permission Description Completeness
+sprint: S12
+spec: Security — audit trail readability
+status: done
+
+description: |
+  As a platform auditor, I want all permissions to have human-readable descriptions
+  so that audit log entries can be understood without looking up code.
+
+acceptance_criteria:
+  - given: all permissions across all 10 modules
+    when: Description property is checked
+    then: no permission has null or whitespace-only Description
+
+implementation:
+  test_file: tests/ProjectDora.Modules.Tests/Security/PermissionSecurityTests.cs
+  test_method: Security_Permissions_AllPermissionsHaveDescriptions
+  convention: >
+    Description format: "[Verb] [resource/operation]"
+    Examples: "Manage user accounts and role assignments",
+              "View audit trail logs", "Purge audit trail history"

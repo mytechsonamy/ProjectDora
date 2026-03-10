@@ -200,7 +200,7 @@ xUnit test stubs from DoR YAML story cards.
 ### Context Files to Read
 - .claude/ai-sdlc/definition-of-ready.md (DoR template, parsing instructions)
 - .claude/testing/test-strategy.md (naming conventions, TDD policy, tooling)
-- .claude/testing/golden-dataset.md (fixture data for integration/AI tests)
+- .claude/testing/golden-dataset.md (fixture data for integration tests)
 - .claude/testing/test-cases.md (existing test registry, avoid duplicates)
 - Existing test files in tests/ directory
 
@@ -290,7 +290,7 @@ coverage, and identify gaps.
 - Coverage must meet targets defined in test-strategy.md
 - All acceptance tests and edge cases must pass
 - Report any untested code paths
-- Run golden dataset validation, report accuracy metrics
+- Run golden dataset validation, report results
 
 ### Task
 For story {story_id}:
@@ -306,7 +306,6 @@ Return a test report with:
 - Pass/Fail summary (total, passed, failed, skipped)
 - Coverage percentage vs target
 - List of untested code paths (if any)
-- AI accuracy metrics (if applicable)
 - Recommendation: PASS / FAIL with reason
 ```
 
@@ -510,7 +509,6 @@ Sprint S03 — 4 stories
 | Coverage delta | Increasing or stable | Coverlet trend |
 | Fix loop rate | < 20% of stories need fix loop | Pipeline tracking |
 | Escalation rate | < 5% of stories escalated | Pipeline tracking |
-| Platform golden dataset accuracy | >= 90% | Custom reporter |
 
 ### Quality Trend Dashboard
 

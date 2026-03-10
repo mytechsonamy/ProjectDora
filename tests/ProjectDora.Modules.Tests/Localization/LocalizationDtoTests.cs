@@ -137,9 +137,10 @@ public class LocalizationDtoTests
     [Trait("StoryId", "US-801")]
     public void Localization_Dto_CultureSettingsDto_TurkishDisplayName()
     {
+        var onlyCultures = new[] { "tr" };
         var settings = new CultureSettingsDto(
             "tr",
-            new[] { "tr" },
+            onlyCultures,
             true);
 
         settings.DefaultCulture.Should().Be("tr");

@@ -1,0 +1,1069 @@
+/*
+ * ProjectDora — KOSGEB Kurumsal Admin Teması
+ * Orchard Core TheAdmin override
+ * Version: 1.0.0
+ *
+ * Renk Paleti:
+ *   --pd-navy:        #01315E  (koyu lacivert — navbar)
+ *   --pd-sidebar:     #023E8A  (KOSGEB navy — sidebar)
+ *   --pd-red:         #C1121F  (KOSGEB kırmızı — primary)
+ *   --pd-red-dark:    #9D0208  (hover kırmızı)
+ *   --pd-surface:     #F0F4F8  (içerik arkaplanı)
+ *   --pd-card:        #FFFFFF  (kart arkaplanı)
+ *   --pd-text:        #1A1A2E  (ana metin)
+ */
+
+/* =========================================================
+   1. DESIGN TOKENS
+   ========================================================= */
+:root {
+  --pd-navy:            #01315E;
+  --pd-sidebar:         #023E8A;
+  --pd-sidebar-hover:   #034EA2;
+  --pd-sidebar-active:  #0461C9;
+  --pd-red:             #C1121F;
+  --pd-red-dark:        #9D0208;
+  --pd-red-light:       #F8D7DA;
+  --pd-amber:           #E9A500;
+  --pd-surface:         #F0F4F8;
+  --pd-surface-2:       #E4EAF2;
+  --pd-card:            #FFFFFF;
+  --pd-text:            #1A1A2E;
+  --pd-text-muted:      #6B7A99;
+  --pd-border:          #D1DBE8;
+  --pd-shadow-sm:       0 1px 3px rgba(1,49,94,.10), 0 1px 2px rgba(1,49,94,.06);
+  --pd-shadow-md:       0 4px 12px rgba(1,49,94,.12), 0 2px 4px rgba(1,49,94,.08);
+  --pd-radius:          8px;
+  --pd-radius-sm:       4px;
+  --pd-radius-lg:       12px;
+  --pd-transition:      0.18s ease;
+
+  /* Bootstrap overrides */
+  --bs-primary:         #C1121F;
+  --bs-primary-rgb:     193, 18, 31;
+  --bs-primary-bg-subtle:  #F8D7DA;
+  --bs-primary-text-emphasis: #9D0208;
+  --bs-link-color:      #023E8A;
+  --bs-link-hover-color:#01315E;
+  --bs-border-radius:   8px;
+  --bs-border-radius-sm:4px;
+  --bs-border-radius-lg:12px;
+  --bs-font-sans-serif: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --bs-body-font-family:var(--bs-font-sans-serif);
+  --bs-body-bg:         #F0F4F8;
+  --bs-body-color:      #1A1A2E;
+
+  /* OC TheAdmin overrides — sidebar */
+  --oc-admin-menu-bg-color:           #023E8A;
+  --oc-admin-menu-font-color:         rgba(255,255,255,0.72);
+  --oc-admin-menu-font-color-hover:   rgba(255,255,255,1);
+  --oc-admin-menu-item-bg-color:      #023E8A;
+  --oc-admin-menu-item-font-color:    rgba(255,255,255,0.72);
+  --oc-admin-menu-item-font-color-active: #FFFFFF;
+  --oc-li-hover-bg-color:             rgba(255,255,255,0.10);
+  --oc-selected-indicator-color:      #C1121F;
+  --oc-scrollbar-color:               rgba(255,255,255,0.25);
+}
+
+/* =========================================================
+   2. TYPOGRAPHY
+   ========================================================= */
+body {
+  font-family: var(--bs-font-sans-serif);
+  color: var(--pd-text);
+}
+
+/* Import Inter from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+h1, .ta-content h1 {
+  font-size: 1.75rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--pd-navy) !important;
+  line-height: 1.2 !important;
+}
+
+h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  color: var(--pd-navy);
+}
+
+/* =========================================================
+   3. TOP NAVIGATION BAR
+   ========================================================= */
+.navbar.bg-dark,
+.navbar[data-bs-theme="dark"],
+.ta-top-navbar,
+.ta-navbar-top,
+nav.navbar.text-bg-theme,
+nav.ta-navbar-top {
+  background-color: var(--pd-navy) !important;
+  background: linear-gradient(135deg, var(--pd-navy) 0%, #012a50 100%) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 2px 8px rgba(1,49,94,0.25) !important;
+  min-height: var(--oc-top-nav-height) !important;
+}
+
+/* Brand / Logo */
+.navbar-brand {
+  font-weight: 700 !important;
+  font-size: 1.1rem !important;
+  letter-spacing: -0.01em !important;
+  color: #FFFFFF !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.navbar-brand::before {
+  content: '';
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  background: var(--pd-red);
+  border-radius: 6px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/%3E%3C/svg%3E");
+  background-size: 16px 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.navbar-brand:hover {
+  color: rgba(255,255,255,0.9) !important;
+  text-decoration: none !important;
+}
+
+/* Top navbar items */
+.navbar .nav-link,
+.ta-top-navbar .nav-link,
+.ta-navbar-top .nav-link {
+  color: rgba(255,255,255,0.80) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  border-radius: var(--pd-radius-sm) !important;
+  padding: 6px 10px !important;
+  transition: all var(--pd-transition) !important;
+}
+
+.navbar .nav-link:hover,
+.ta-top-navbar .nav-link:hover,
+.ta-navbar-top .nav-link:hover {
+  color: #FFFFFF !important;
+  background: rgba(255,255,255,0.12) !important;
+  text-decoration: none !important;
+}
+
+/* =========================================================
+   4. LEFT SIDEBAR
+   ========================================================= */
+#ta-left-sidebar,
+body:not(.left-sidebar-compact) #ta-left-sidebar {
+  background-color: var(--pd-sidebar) !important;
+  background: linear-gradient(180deg, #023E8A 0%, #01315E 100%) !important;
+  border-right: none !important;
+  box-shadow: 2px 0 8px rgba(1,49,94,0.15) !important;
+
+  /*
+   * Override OC CSS variables AT ELEMENT LEVEL (specificity 1,0,0)
+   * so they win over TheAdmin.css :root definitions (specificity 0,0,0).
+   * TheAdmin.css loads AFTER us (index 4 vs 1) and resets these in :root,
+   * but element-level definitions take precedence over :root for descendants.
+   */
+  --oc-admin-menu-font-color:               rgba(255, 255, 255, 0.82);
+  --oc-admin-menu-font-color-hover:         #ffffff;
+  --oc-admin-menu-item-font-color:          rgba(255, 255, 255, 0.78);
+  --oc-admin-menu-item-font-color-active:   #ffffff;
+  --oc-admin-menu-item-bg-color:            transparent;
+  --oc-admin-menu-bg-color:                 transparent;
+  --oc-li-hover-bg-color:                   rgba(255, 255, 255, 0.12);
+  --oc-selected-indicator-color:            #C1121F;
+  --oc-scrollbar-color:                     rgba(255, 255, 255, 0.25);
+  /* Bootstrap body color override for this subtree */
+  --bs-body-color:                          rgba(255, 255, 255, 0.78);
+  --bs-body-color-rgb:                      255, 255, 255;
+  --bs-nav-link-color:                      rgba(255, 255, 255, 0.78);
+  --bs-nav-link-hover-color:                #ffffff;
+}
+
+/* Sidebar scrollbar */
+#ta-left-sidebar::-webkit-scrollbar { width: 4px; }
+#ta-left-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+}
+#ta-left-sidebar::-webkit-scrollbar-track { background: transparent; }
+
+/* Sidebar section labels */
+.nav-sidebar .nav-heading,
+.nav-sidebar [data-bs-toggle] > .d-flex > span:last-child,
+.nav-sidebar .nav-item > a > .d-flex > span {
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* First-level nav items */
+.nav-sidebar > li > a,
+.nav-sidebar > .nav-item > a {
+  color: rgba(255,255,255,0.75) !important;
+  border-radius: 6px !important;
+  margin: 1px 8px !important;
+  padding: 8px 10px !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  transition: all var(--pd-transition) !important;
+}
+
+.nav-sidebar > li > a:hover,
+.nav-sidebar > .nav-item > a:hover {
+  background: rgba(255,255,255,0.12) !important;
+  color: #FFFFFF !important;
+  text-decoration: none !important;
+}
+
+.nav-sidebar > li > a[aria-expanded="true"],
+.nav-sidebar > .nav-item > a[aria-expanded="true"] {
+  background: rgba(255,255,255,0.15) !important;
+  color: #FFFFFF !important;
+}
+
+/* Icon colors in sidebar */
+.nav-sidebar .icon {
+  color: rgba(255,255,255,0.55) !important;
+}
+.nav-sidebar a:hover .icon,
+.nav-sidebar a[aria-expanded="true"] .icon {
+  color: rgba(255,255,255,0.9) !important;
+}
+
+/* Sub-menu items */
+.nav-sidebar .collapse .nav-item a,
+.nav-sidebar .collapsing .nav-item a {
+  color: rgba(255,255,255,0.65) !important;
+  font-size: 0.84rem !important;
+  padding: 6px 10px 6px 32px !important;
+  border-radius: 6px !important;
+  margin: 1px 8px !important;
+  transition: all var(--pd-transition) !important;
+}
+
+.nav-sidebar .collapse .nav-item a:hover,
+.nav-sidebar .collapsing .nav-item a:hover {
+  background: rgba(255,255,255,0.1) !important;
+  color: #FFFFFF !important;
+  text-decoration: none !important;
+}
+
+/* Active / selected item — red left indicator */
+.nav-sidebar .nav-item a.active,
+.nav-sidebar .nav-item a[aria-current="page"] {
+  color: #FFFFFF !important;
+  background: rgba(255,255,255,0.18) !important;
+  border-left: 3px solid var(--pd-red) !important;
+}
+
+/* Sidebar collapse arrow */
+.nav-sidebar [data-bs-toggle="collapse"]::after,
+.nav-sidebar [data-bs-toggle="collapse"] .caret {
+  color: rgba(255,255,255,0.5) !important;
+}
+
+/* =========================================================
+   5. CONTENT AREA
+   ========================================================= */
+.ta-content {
+  background-color: var(--pd-surface) !important;
+  min-height: 100vh;
+}
+
+/* Page header bar */
+.ta-content > .d-flex:first-child,
+.ta-content > .row:first-child {
+  margin-bottom: 1.5rem !important;
+}
+
+/* =========================================================
+   6. CARDS
+   ========================================================= */
+.card {
+  border: 1px solid var(--pd-border) !important;
+  border-radius: var(--pd-radius) !important;
+  box-shadow: var(--pd-shadow-sm) !important;
+  background: var(--pd-card) !important;
+  transition: box-shadow var(--pd-transition) !important;
+}
+
+.card:hover {
+  box-shadow: var(--pd-shadow-md) !important;
+}
+
+.card-header {
+  background: #FAFBFD !important;
+  border-bottom: 1px solid var(--pd-border) !important;
+  border-radius: var(--pd-radius) var(--pd-radius) 0 0 !important;
+  font-weight: 600 !important;
+  color: var(--pd-navy) !important;
+  padding: 0.875rem 1.25rem !important;
+}
+
+.card-footer {
+  background: #FAFBFD !important;
+  border-top: 1px solid var(--pd-border) !important;
+  border-radius: 0 0 var(--pd-radius) var(--pd-radius) !important;
+}
+
+/* =========================================================
+   7. BUTTONS
+   ========================================================= */
+.btn-primary {
+  background-color: var(--pd-red) !important;
+  border-color: var(--pd-red) !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  padding: 0.44rem 1.1rem !important;
+  font-size: 0.875rem !important;
+  transition: all var(--pd-transition) !important;
+  box-shadow: 0 1px 3px rgba(193,18,31,0.3) !important;
+}
+
+.btn-primary:hover, .btn-primary:focus {
+  background-color: var(--pd-red-dark) !important;
+  border-color: var(--pd-red-dark) !important;
+  box-shadow: 0 3px 8px rgba(193,18,31,0.35) !important;
+  transform: translateY(-1px) !important;
+}
+
+.btn-primary:active {
+  transform: translateY(0) !important;
+}
+
+.btn-secondary {
+  background-color: transparent !important;
+  border-color: var(--pd-border) !important;
+  color: var(--pd-text) !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+  padding: 0.44rem 1.1rem !important;
+  font-size: 0.875rem !important;
+}
+
+.btn-secondary:hover {
+  background-color: var(--pd-surface-2) !important;
+  border-color: var(--pd-sidebar) !important;
+  color: var(--pd-navy) !important;
+}
+
+.btn-danger {
+  background-color: #DC2626 !important;
+  border-color: #DC2626 !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+}
+
+.btn-success {
+  background-color: #16A34A !important;
+  border-color: #16A34A !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+}
+
+.btn-warning {
+  background-color: var(--pd-amber) !important;
+  border-color: var(--pd-amber) !important;
+  color: #1A1A2E !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+}
+
+.btn-info {
+  background-color: var(--pd-sidebar) !important;
+  border-color: var(--pd-sidebar) !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+}
+
+.btn-link {
+  color: var(--pd-sidebar) !important;
+  font-weight: 500 !important;
+}
+
+.btn-link:hover {
+  color: var(--pd-navy) !important;
+}
+
+/* =========================================================
+   8. TABLES
+   ========================================================= */
+.table {
+  font-size: 0.875rem !important;
+  color: var(--pd-text) !important;
+}
+
+.table thead th {
+  background: var(--pd-surface) !important;
+  border-bottom: 2px solid var(--pd-border) !important;
+  color: var(--pd-text-muted) !important;
+  font-weight: 600 !important;
+  font-size: 0.78rem !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  padding: 10px 14px !important;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid var(--pd-border) !important;
+  transition: background var(--pd-transition) !important;
+}
+
+.table tbody tr:hover {
+  background-color: rgba(2,62,138,0.04) !important;
+}
+
+.table td {
+  vertical-align: middle !important;
+  padding: 10px 14px !important;
+}
+
+/* Checkbox column */
+.table td:first-child,
+.table th:first-child {
+  padding-left: 18px !important;
+}
+
+/* =========================================================
+   9. FORMS & INPUTS
+   ========================================================= */
+.form-control,
+.form-select {
+  border: 1px solid var(--pd-border) !important;
+  border-radius: 6px !important;
+  font-size: 0.875rem !important;
+  padding: 0.5rem 0.75rem !important;
+  color: var(--pd-text) !important;
+  background-color: #FFFFFF !important;
+  transition: border-color var(--pd-transition), box-shadow var(--pd-transition) !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--pd-sidebar) !important;
+  box-shadow: 0 0 0 3px rgba(2,62,138,0.15) !important;
+  outline: none !important;
+}
+
+.form-label {
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  color: var(--pd-navy) !important;
+  margin-bottom: 4px !important;
+}
+
+.input-group-text {
+  border-color: var(--pd-border) !important;
+  background-color: var(--pd-surface) !important;
+  color: var(--pd-text-muted) !important;
+  border-radius: 6px !important;
+}
+
+/* Search input */
+input[type="search"].form-control,
+.search-form .form-control {
+  border-radius: 20px !important;
+  padding-left: 1rem !important;
+}
+
+/* =========================================================
+   10. BADGES
+   ========================================================= */
+.badge {
+  border-radius: 20px !important;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  padding: 3px 10px !important;
+  letter-spacing: 0.01em !important;
+}
+
+.badge.bg-primary { background-color: var(--pd-red) !important; }
+.badge.bg-info,
+.badge.bg-secondary { background-color: var(--pd-sidebar) !important; }
+.badge.bg-success { background-color: #16A34A !important; }
+.badge.bg-warning { background-color: var(--pd-amber) !important; color: #1A1A2E !important; }
+.badge.bg-danger { background-color: #DC2626 !important; }
+
+/* Status badges */
+.badge-published,
+[class*="badge"][class*="published"] {
+  background-color: #DCFCE7 !important;
+  color: #166534 !important;
+}
+
+.badge-draft,
+[class*="badge"][class*="draft"] {
+  background-color: #FEF9C3 !important;
+  color: #854D0E !important;
+}
+
+/* =========================================================
+   11. ALERTS & NOTIFICATIONS
+   ========================================================= */
+.alert {
+  border-radius: var(--pd-radius) !important;
+  border-left-width: 4px !important;
+  border-top-width: 1px !important;
+  border-right-width: 1px !important;
+  border-bottom-width: 1px !important;
+  font-size: 0.875rem !important;
+}
+
+.alert-info {
+  background: rgba(2,62,138,0.06) !important;
+  border-color: var(--pd-sidebar) !important;
+  color: var(--pd-navy) !important;
+}
+
+.alert-success {
+  background: #F0FDF4 !important;
+  border-color: #16A34A !important;
+  color: #166534 !important;
+}
+
+.alert-warning {
+  background: #FFFBEB !important;
+  border-color: var(--pd-amber) !important;
+  color: #92400E !important;
+}
+
+.alert-danger {
+  background: #FFF1F2 !important;
+  border-color: var(--pd-red) !important;
+  color: var(--pd-red-dark) !important;
+}
+
+/* No-data info boxes (light blue in OC) */
+.alert-info.no-items {
+  background: rgba(2,62,138,0.05) !important;
+  border-left: 4px solid var(--pd-sidebar) !important;
+}
+
+/* =========================================================
+   12. PAGINATION
+   ========================================================= */
+.pagination .page-link {
+  color: var(--pd-sidebar) !important;
+  border-color: var(--pd-border) !important;
+  border-radius: 6px !important;
+  margin: 0 2px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  min-width: 36px !important;
+  text-align: center !important;
+}
+
+.pagination .page-link:hover {
+  background: rgba(2,62,138,0.08) !important;
+  border-color: var(--pd-sidebar) !important;
+  color: var(--pd-navy) !important;
+}
+
+.pagination .page-item.active .page-link {
+  background-color: var(--pd-sidebar) !important;
+  border-color: var(--pd-sidebar) !important;
+  color: #FFFFFF !important;
+}
+
+/* =========================================================
+   13. BREADCRUMBS
+   ========================================================= */
+.breadcrumb {
+  font-size: 0.8rem !important;
+  margin-bottom: 0 !important;
+}
+
+.breadcrumb-item a {
+  color: var(--pd-sidebar) !important;
+  font-weight: 500 !important;
+}
+
+.breadcrumb-item a:hover {
+  color: var(--pd-navy) !important;
+  text-decoration: none !important;
+}
+
+.breadcrumb-item.active {
+  color: var(--pd-text-muted) !important;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+  color: var(--pd-border) !important;
+}
+
+/* =========================================================
+   14. ACTION BAR (top of list pages)
+   ========================================================= */
+.ta-action-bar,
+[class*="action-bar"] {
+  background: var(--pd-card) !important;
+  border: 1px solid var(--pd-border) !important;
+  border-radius: var(--pd-radius) !important;
+  box-shadow: var(--pd-shadow-sm) !important;
+  padding: 0.75rem 1rem !important;
+  margin-bottom: 1rem !important;
+}
+
+/* =========================================================
+   15. DROPDOWN MENUS
+   ========================================================= */
+.dropdown-menu {
+  border: 1px solid var(--pd-border) !important;
+  border-radius: var(--pd-radius) !important;
+  box-shadow: var(--pd-shadow-md) !important;
+  font-size: 0.875rem !important;
+  padding: 4px !important;
+}
+
+.dropdown-item {
+  border-radius: var(--pd-radius-sm) !important;
+  padding: 6px 12px !important;
+  color: var(--pd-text) !important;
+  font-weight: 400 !important;
+  transition: all var(--pd-transition) !important;
+}
+
+.dropdown-item:hover {
+  background-color: rgba(2,62,138,0.07) !important;
+  color: var(--pd-navy) !important;
+}
+
+.dropdown-item.text-danger:hover {
+  background-color: rgba(193,18,31,0.07) !important;
+  color: var(--pd-red-dark) !important;
+}
+
+.dropdown-divider {
+  border-color: var(--pd-border) !important;
+  margin: 4px 0 !important;
+}
+
+/* =========================================================
+   16. MODALS
+   ========================================================= */
+.modal-content {
+  border-radius: var(--pd-radius-lg) !important;
+  border: 1px solid var(--pd-border) !important;
+  box-shadow: 0 20px 60px rgba(1,49,94,0.18) !important;
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--pd-border) !important;
+  background: var(--pd-surface) !important;
+  border-radius: var(--pd-radius-lg) var(--pd-radius-lg) 0 0 !important;
+  padding: 1rem 1.5rem !important;
+}
+
+.modal-title {
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  color: var(--pd-navy) !important;
+}
+
+.modal-footer {
+  border-top: 1px solid var(--pd-border) !important;
+  padding: 0.75rem 1.5rem !important;
+}
+
+/* =========================================================
+   17. TABS
+   ========================================================= */
+.nav-tabs {
+  border-bottom: 2px solid var(--pd-border) !important;
+}
+
+.nav-tabs .nav-link {
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  margin-bottom: -2px !important;
+  color: var(--pd-text-muted) !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  padding: 10px 16px !important;
+  transition: all var(--pd-transition) !important;
+}
+
+.nav-tabs .nav-link:hover {
+  border-bottom-color: var(--pd-sidebar) !important;
+  color: var(--pd-sidebar) !important;
+}
+
+.nav-tabs .nav-link.active {
+  border-bottom: 2px solid var(--pd-red) !important;
+  color: var(--pd-red) !important;
+  font-weight: 600 !important;
+  background: transparent !important;
+}
+
+/* =========================================================
+   18. CONTENT PAGE HEADER
+   ========================================================= */
+.ta-content > * > h1:first-child,
+.ta-content > h1:first-child {
+  padding-bottom: 0.75rem !important;
+  border-bottom: 2px solid var(--pd-border) !important;
+  margin-bottom: 1.5rem !important;
+}
+
+/* Title + action button row */
+.ta-content .d-flex.align-items-center.justify-content-between {
+  padding-bottom: 1rem !important;
+  border-bottom: 1px solid var(--pd-border) !important;
+  margin-bottom: 1.5rem !important;
+}
+
+/* =========================================================
+   19. SIDEBAR FOOTER (collapse button)
+   ========================================================= */
+.ta-left-sidebar-footer,
+[id*="sidebar"] .position-sticky.bottom-0 {
+  border-top: 1px solid rgba(255,255,255,0.1) !important;
+  padding: 8px !important;
+}
+
+.ta-left-sidebar-footer button,
+[id*="sidebar"] .position-sticky.bottom-0 button {
+  color: rgba(255,255,255,0.6) !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.ta-left-sidebar-footer button:hover,
+[id*="sidebar"] .position-sticky.bottom-0 button:hover {
+  color: #FFFFFF !important;
+}
+
+/* =========================================================
+   20. WELCOME WIDGET
+   ========================================================= */
+.alert.alert-info.text-center,
+.jumbotron {
+  background: linear-gradient(135deg, rgba(2,62,138,0.08) 0%, rgba(1,49,94,0.05) 100%) !important;
+  border: 1px solid rgba(2,62,138,0.2) !important;
+  border-radius: var(--pd-radius-lg) !important;
+  color: var(--pd-navy) !important;
+}
+
+/* =========================================================
+   21. EMPTY STATE MESSAGES
+   ========================================================= */
+.alert.text-center {
+  border-radius: var(--pd-radius-lg) !important;
+  padding: 2rem !important;
+}
+
+/* =========================================================
+   22. LIST GROUP
+   ========================================================= */
+.list-group-item {
+  border-color: var(--pd-border) !important;
+  font-size: 0.875rem !important;
+}
+
+.list-group-item.active {
+  background-color: var(--pd-sidebar) !important;
+  border-color: var(--pd-sidebar) !important;
+}
+
+.list-group-item-action:hover {
+  background-color: rgba(2,62,138,0.05) !important;
+}
+
+/* =========================================================
+   23. CODE BLOCKS
+   ========================================================= */
+code {
+  color: var(--pd-red) !important;
+  background: rgba(193,18,31,0.06) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 0.85em !important;
+}
+
+pre {
+  background: var(--pd-navy) !important;
+  color: #E2E8F0 !important;
+  border-radius: var(--pd-radius) !important;
+  padding: 1rem !important;
+  font-size: 0.8rem !important;
+}
+
+/* =========================================================
+   24. SCROLL TO TOP / BACK BUTTON
+   ========================================================= */
+a.btn-back,
+.btn-back {
+  color: var(--pd-sidebar) !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+}
+
+/* =========================================================
+   25. KOSGEB BRAND MARK (sidebar header)
+   ========================================================= */
+.ta-start-navigation-header,
+[id*="sidebar"] > .d-flex:first-child,
+#ta-left-sidebar > div:first-child {
+  background: rgba(0,0,0,0.15) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.1) !important;
+  padding: 12px 16px !important;
+}
+
+/* =========================================================
+   26. FEATURE LIST (Features page)
+   ========================================================= */
+.feature-list-item,
+.field-group {
+  background: var(--pd-card) !important;
+  border: 1px solid var(--pd-border) !important;
+  border-radius: var(--pd-radius) !important;
+  padding: 1rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* =========================================================
+   27. ORCHARD MODULE BADGES (Features page)
+   ========================================================= */
+.module-name,
+a[href*="module"] code {
+  color: var(--pd-sidebar) !important;
+}
+
+/* =========================================================
+   28. SIDEBAR INTERIOR FORCE OVERRIDES
+   — kosgeb-admin.css loads BEFORE OC's CSS (index 1 vs 2-4)
+   — OC's TheAdmin.css resets --oc-admin-menu-bg-color AFTER us
+   — Solution: target inner elements directly (not via OC variables)
+   ========================================================= */
+
+/* Force all inner containers transparent so gradient bleeds through */
+#ta-left-sidebar > *,
+#ta-left-sidebar nav,
+#ta-left-sidebar nav > *,
+#left-nav,
+#left-nav > *,
+#left-nav .nav,
+#left-nav ul,
+#left-nav li,
+.nav-sidebar,
+.nav-sidebar > li,
+.navbar-nav.flex-column,
+.navbar-nav.flex-column > *,
+[id="ta-left-sidebar"] > nav {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+/*
+ * OC TheAdmin structure (confirmed via DOM inspection):
+ *   #left-nav (nav)
+ *     #adminMenu.menu-admin (ul)
+ *       li.{section-class}
+ *         figure
+ *           figcaption
+ *             a.item-label.d-flex  ← TOP-LEVEL link
+ *               span.icon
+ *               span.title
+ *         ul.collapse#{id}
+ *           li
+ *             a.item-label.d-flex  ← SUB-MENU link (dark by default from OC)
+ *               span.icon.icon-none
+ *               span.title
+ *
+ * Problem: OC's TheAdmin.css (index 4, loads AFTER us at index 1) has
+ *   a.item-label { color: var(--bs-body-color) }  → rgba(33,37,41,0.75) ← dark!
+ * Fix: target a.item-label explicitly with !important + higher specificity
+ */
+
+/* ALL item-label links in sidebar — white text */
+#ta-left-sidebar a.item-label,
+#left-nav a.item-label,
+#adminMenu a.item-label {
+  color: rgba(255, 255, 255, 0.82) !important;
+  background-color: transparent !important;
+  text-decoration: none !important;
+}
+
+/* The text span inside item-label — must inherit explicitly */
+#ta-left-sidebar a.item-label .title,
+#left-nav a.item-label .title,
+#adminMenu a.item-label .title {
+  color: inherit !important;
+}
+
+/* Hover — brighten */
+#ta-left-sidebar a.item-label:hover,
+#left-nav a.item-label:hover,
+#adminMenu a.item-label:hover {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Expanded (aria-expanded="true") — slightly highlighted */
+#ta-left-sidebar a.item-label[aria-expanded="true"],
+#left-nav a.item-label[aria-expanded="true"],
+#adminMenu a.item-label[aria-expanded="true"] {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+/* Active / current page — KOSGEB red left bar */
+#ta-left-sidebar a.item-label.active,
+#ta-left-sidebar a.item-label[aria-current],
+#left-nav a.item-label.active,
+#left-nav a.item-label[aria-current],
+#adminMenu a.item-label.active,
+#adminMenu a.item-label[aria-current] {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.18) !important;
+  border-left: 3px solid #C1121F !important;
+}
+
+/* Sub-menu items specifically — slightly dimmer + indented */
+#adminMenu .collapse a.item-label,
+#adminMenu .collapsing a.item-label,
+#left-nav .collapse a.item-label,
+#left-nav .collapsing a.item-label {
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-size: 0.84rem !important;
+  padding-left: 2.25rem !important;
+}
+
+#adminMenu .collapse a.item-label:hover,
+#adminMenu .collapsing a.item-label:hover,
+#left-nav .collapse a.item-label:hover {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+#adminMenu .collapse a.item-label.active,
+#left-nav .collapse a.item-label.active {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.16) !important;
+  border-left: 3px solid #C1121F !important;
+}
+
+/* Collapse container — transparent */
+#ta-left-sidebar .collapse,
+#ta-left-sidebar .collapsing,
+#left-nav .collapse,
+#left-nav .collapsing,
+#adminMenu .collapse,
+#adminMenu .collapsing {
+  background-color: transparent !important;
+}
+
+/* Icons — white/faded */
+#ta-left-sidebar .icon,
+#left-nav .icon,
+#adminMenu .icon {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+#ta-left-sidebar a.item-label:hover .icon,
+#ta-left-sidebar a.item-label[aria-expanded="true"] .icon,
+#ta-left-sidebar a.item-label.active .icon,
+#left-nav a.item-label:hover .icon,
+#left-nav a.item-label.active .icon {
+  color: rgba(255, 255, 255, 0.90) !important;
+}
+
+/* Collapse chevron arrows */
+#ta-left-sidebar .collapse-icon,
+#left-nav .collapse-icon,
+#adminMenu .collapse-icon {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* Section heading labels */
+#ta-left-sidebar .nav-heading,
+#left-nav .nav-heading,
+.nav-sidebar .nav-heading {
+  color: rgba(255, 255, 255, 0.40) !important;
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  padding: 12px 16px 4px !important;
+  background-color: transparent !important;
+}
+
+/* Sidebar dividers */
+#ta-left-sidebar hr,
+#left-nav hr {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  opacity: 1 !important;
+}
+
+/* =========================================================
+   29. RESPONSIVE ADJUSTMENTS
+   ========================================================= */
+@media (max-width: 768px) {
+  .ta-content {
+    padding: 1rem 0.75rem !important;
+  }
+
+  h1, .ta-content h1 {
+    font-size: 1.4rem !important;
+  }
+
+  .btn-primary, .btn-secondary {
+    font-size: 0.82rem !important;
+    padding: 0.4rem 0.9rem !important;
+  }
+}
+
+/* =========================================================
+   30. DARK MODE SUPPORT (minimal overrides)
+   ========================================================= */
+[data-bs-theme="dark"] {
+  --bs-body-bg: #0F172A;
+  --bs-body-color: #E2E8F0;
+  --pd-surface: #1E293B;
+  --pd-surface-2: #334155;
+  --pd-card: #1E293B;
+  --pd-border: #334155;
+  --pd-text: #E2E8F0;
+  --pd-text-muted: #94A3B8;
+}
+
+[data-bs-theme="dark"] .card {
+  background: #1E293B !important;
+  border-color: #334155 !important;
+}
+
+[data-bs-theme="dark"] .card-header {
+  background: #1A2744 !important;
+  border-color: #334155 !important;
+  color: #E2E8F0 !important;
+}
+
+[data-bs-theme="dark"] .table thead th {
+  background: #0F172A !important;
+  color: #94A3B8 !important;
+  border-color: #334155 !important;
+}
+
+[data-bs-theme="dark"] h1,
+[data-bs-theme="dark"] .ta-content h1 {
+  color: #E2E8F0 !important;
+}
+
+/* =========================================================
+   31. PRINT STYLES
+   ========================================================= */
+@media print {
+  #ta-left-sidebar, .ta-top-navbar, .ta-navbar-top { display: none !important; }
+  .ta-content { margin: 0 !important; padding: 0 !important; }
+}

@@ -1,0 +1,25 @@
+id: US-1204
+title: Security-Critical Module Coverage
+sprint: S12
+spec: Security — destructive operation tagging
+status: done
+
+description: |
+  As a security auditor, I want security-sensitive modules to have at least one
+  security-critical permission so that destructive operations are visually
+  distinguished in the UI and always audited.
+
+acceptance_criteria:
+  - given: modules: AdminPanel, AuditTrail, Infrastructure, ThemeManagement, UserManagement, Integration
+    when: permissions are checked
+    then: each of these 6 modules has at least one permission with IsSecurityCritical = true
+  - given: security-critical permission is exercised
+    when: audit trail is running
+    then: operation is logged regardless of tenant audit settings
+
+implementation:
+  test_file: tests/ProjectDora.Modules.Tests/Security/PermissionSecurityTests.cs
+  test_method: Security_Permissions_AllModulesHaveAtLeastOneSecurityCriticalPermission
+  notes: >
+    ContentModeling, Localization, QueryEngine, Workflows do NOT require
+    security-critical permissions (they are operational, not administrative).

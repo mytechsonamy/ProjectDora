@@ -196,7 +196,7 @@ await act.Should().ThrowAsync<ValidationException>()
 response.StatusCode.Should().Be(HttpStatusCode.Created);
 response.Headers.Location.Should().NotBeNull();
 
-// Approximate (for AI)
+// Approximate numeric assertion
 confidence.Should().BeGreaterOrEqualTo(0.7);
 ```
 

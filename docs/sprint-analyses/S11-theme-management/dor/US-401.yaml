@@ -1,0 +1,46 @@
+id: US-401
+title: Theme Discovery and Activation
+sprint: S11
+spec: 4.1.4.1
+status: done
+
+description: |
+  As an administrator, I want to browse available themes and activate one so that
+  the platform's visual presentation can be changed without code deployment.
+
+acceptance_criteria:
+  - given: admin navigates to Theme Management panel
+    when: page loads
+    then: list of available themes is displayed with name, description, version, author
+  - given: admin selects a theme and clicks Activate
+    when: activation completes
+    then: active theme changes immediately; previous theme is deactivated
+  - given: IThemeService.ListAvailableAsync() is called
+    when: extension manager has themes registered
+    then: returns non-empty list of ThemeDto records
+  - given: IThemeService.GetActiveAsync() is called
+    when: a theme is active
+    then: returns ThemeDto with IsActive = true
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.IThemeService
+  implementation: ProjectDora.ThemeManagement.Services.OrchardThemeService
+  key_apis:
+    - IExtensionManager.GetExtensions().Where(e => e.IsTheme())
+    - ISiteThemeService.SetSiteThemeAsync(themeId)
+  notes: >
+    OC 2.x: use sync GetExtensions() not async LoadExtensionsAsync().
+    Wrap in Task.FromResult for async interface compliance.
+
+permissions_required:
+  - ManageThemes (IsSecurityCritical: true)
+
+test_ids:
+  - US-401-01
+  - US-401-02
+  - US-402-01
+  - US-402-02
+
+dependencies:
+  - S01 (AdminPanel — theme management UI lives in admin)
+  - S09 (Infrastructure — tenant-scoped theme config)

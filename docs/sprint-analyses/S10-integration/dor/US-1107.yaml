@@ -1,0 +1,27 @@
+id: US-1107
+title: OpenAPI Specification (Swagger UI)
+sprint: S10
+spec: 4.1.11.7
+status: done
+
+description: |
+  As a developer, I want interactive API documentation via Swagger UI so that I
+  can explore and test the REST API without writing code.
+
+acceptance_criteria:
+  - given: GET /swagger
+    when: development or staging environment
+    then: Swagger UI loads showing all REST API endpoints
+  - given: Swagger UI shows endpoint
+    when: developer clicks "Try it out" and executes
+    then: request is sent with current auth; response displayed
+  - given: GET /swagger/v1/swagger.json
+    when: requested
+    then: returns valid OpenAPI 3.0 JSON spec for all platform endpoints
+
+implementation:
+  package: Swashbuckle.AspNetCore (or NSwag)
+  notes: >
+    OpenAPI spec auto-generated from controller attributes.
+    API key authentication documented in security schemes.
+    Disabled in production by default (configurable via appsettings).

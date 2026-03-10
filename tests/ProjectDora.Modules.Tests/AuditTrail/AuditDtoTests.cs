@@ -150,11 +150,12 @@ public class AuditDtoTests
     [Trait("StoryId", "US-903")]
     public void AuditTrail_Dto_AuditSettingsDto_ContentTypeScopingPreservesTypes()
     {
+        var auditedTypes = new[] { "DestekProgrami", "Duyuru", "KobiProfili" };
         var settings = new AuditSettingsDto(
             true,
             365,
             1_000_000,
-            new[] { "DestekProgrami", "Duyuru", "KobiProfili" },
+            auditedTypes,
             "0 2 * * *");
 
         settings.AuditedContentTypes.Should().HaveCount(3);

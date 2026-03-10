@@ -9,16 +9,23 @@
     <ProjectReference Include="..\ProjectDora.Modules\ProjectDora.Workflows\ProjectDora.Workflows.csproj" />
     <ProjectReference Include="..\ProjectDora.Modules\ProjectDora.Localization\ProjectDora.Localization.csproj" />
     <ProjectReference Include="..\ProjectDora.Modules\ProjectDora.AuditTrail\ProjectDora.AuditTrail.csproj" />
+    <ProjectReference Include="..\ProjectDora.Modules\ProjectDora.Infrastructure\ProjectDora.Infrastructure.csproj" />
+    <ProjectReference Include="..\ProjectDora.Modules\ProjectDora.Integration\ProjectDora.Integration.csproj" />
+    <ProjectReference Include="..\ProjectDora.Modules\ProjectDora.ThemeManagement\ProjectDora.ThemeManagement.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="OrchardCore.Application.Cms.Targets" Version="2.1.4" />
+    <!-- Pin to resolve transitive downgrade from Microsoft.Identity.Web -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.0" />
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Suppress NuGet audit warnings for transitive deps from OrchardCore 2.1.4 -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
 
 </Project>

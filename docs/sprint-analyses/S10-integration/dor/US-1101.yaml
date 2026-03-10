@@ -1,0 +1,39 @@
+id: US-1101
+title: REST API for Content Access (Headless CMS)
+sprint: S10
+spec: 4.1.11.1, 4.1.11.2
+status: done
+
+description: |
+  As a front-end developer, I want to access content items via a REST API so that
+  I can build decoupled front-end applications without depending on Orchard Core's
+  server-side rendering.
+
+acceptance_criteria:
+  - given: GET /api/content/{contentType} with valid API key
+    when: content items exist
+    then: returns paginated JSON array of content items
+  - given: GET /api/content/{contentType}/{id} with valid API key
+    when: content item exists
+    then: returns single content item JSON
+  - given: request sent without API key
+    when: endpoint is protected
+    then: returns 401 Unauthorized
+  - given: API key has insufficient scope
+    when: content type requires specific permission
+    then: returns 403 Forbidden
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.IIntegrationService
+  notes: >
+    REST endpoints auto-generated from registered content types.
+    OpenAPI spec served at /swagger.
+    API keys managed via IIntegrationService.CreateApiClientAsync().
+
+permissions_required:
+  - AccessHeadlessApi (IsSecurityCritical: false)
+  - ManageApiClients (IsSecurityCritical: true)
+
+dependencies:
+  - S02 (ContentModeling — content types must be registered)
+  - S09 (Infrastructure — OIDC / API key infrastructure)

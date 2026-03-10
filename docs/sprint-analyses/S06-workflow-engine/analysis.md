@@ -3,7 +3,7 @@
 ## Kapsam (Scope)
 - Spec items: 4.1.7.1, 4.1.7.2, 4.1.7.3, 4.1.7.4, 4.1.7.5
 - Stories: US-701, US-702, US-703, US-704, US-705, US-706, US-707, US-708
-- Cross-references: Workflow engine is consumed by Content Management (4.1.3), Audit (4.1.9), Query Engine (4.1.5), Theme Management (4.1.4), and AI modules (4.1.12.x)
+- Cross-references: Workflow engine is consumed by Content Management (4.1.3), Audit (4.1.9), Query Engine (4.1.5), Theme Management (4.1.4)
 - Upstream dependencies: S01 (Admin Panel), S02 (Content Modeling), S03 (Content Management), S04 (Query Management), S05 (User/Role/Permission)
 
 ## Is Analizi Ozeti (Business Analysis Summary)

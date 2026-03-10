@@ -1,0 +1,34 @@
+id: US-1006
+title: Cross-Platform Docker Deployment
+sprint: S09
+spec: 4.1.10.11
+status: done
+
+description: |
+  As a DevOps engineer, I want the platform deployable via Docker Compose on both
+  Windows and Linux so that development and production environments are consistent.
+
+acceptance_criteria:
+  - given: docker-compose up -d on macOS/Apple Silicon
+    when: all services start
+    then: postgres:16, redis:7, elasticsearch:8.11, minio all healthy; app accessible
+  - given: docker-compose up -d on Linux x86_64
+    when: all services start
+    then: same services healthy; no architecture-specific failures
+  - given: app container starts
+    when: DATABASE_URL and REDIS_URL env vars set
+    then: app connects to external services and serves requests
+
+implementation:
+  services:
+    postgres: postgres:16          # Standard (no PGVector)
+    redis: redis:7-alpine
+    elasticsearch: elasticsearch:8.11.0
+    minio: minio/minio
+  notes: >
+    Platform must run offline (no internet dependency at runtime).
+    All images must be pullable and then run without internet access.
+    Docker Compose dev profile includes Elasticsearch; test profile uses SQLite + Lucene.
+
+dependencies:
+  - None (foundational infrastructure)

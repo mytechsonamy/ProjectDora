@@ -1,0 +1,35 @@
+id: US-1202
+title: RBAC Security Completeness
+sprint: S12
+spec: 4.1.6.x (derived — cross-module RBAC audit)
+status: done
+
+description: |
+  As a security auditor, I want to verify that all modules define complete,
+  non-colliding permissions with proper security tagging so that the RBAC system
+  is free of bypass vulnerabilities.
+
+acceptance_criteria:
+  - given: all 10 module IPermissionProvider instances
+    when: all permission names are collected
+    then: no duplicates exist across any module
+  - given: all permission descriptions
+    when: checked
+    then: all permissions have non-empty description text
+  - given: security-critical operations (ManageUsers, ManageThemes, ManageTenants, etc.)
+    when: IsSecurityCritical checked
+    then: all 9 destructive permissions are marked IsSecurityCritical = true
+  - given: security-focused modules (AdminPanel, AuditTrail, Infrastructure, ThemeManagement, UserManagement, Integration)
+    when: permissions checked
+    then: each has at least one IsSecurityCritical permission
+
+implementation:
+  test_file: tests/ProjectDora.Modules.Tests/Security/PermissionSecurityTests.cs
+  notes: >
+    AllProviders() instantiates 10 IPermissionProvider directly (no DI).
+    Tests use fully qualified type names to avoid CS0234 namespace collision.
+    Destructive permissions list: AuditTrail.Purge, AuditTrail.Rollback,
+    Infrastructure.ManageTenants, Infrastructure.PurgeCache,
+    Infrastructure.ManageOpenId, Infrastructure.ManageSettings,
+    Integration.ManageApiClients, ThemeManagement.ManageThemes,
+    UserManagement.ManageUsers.

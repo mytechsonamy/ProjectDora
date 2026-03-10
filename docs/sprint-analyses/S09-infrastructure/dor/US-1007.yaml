@@ -1,0 +1,35 @@
+id: US-1007
+title: Tenant Settings Management UI
+sprint: S09
+spec: 4.1.10.8
+status: done
+
+description: |
+  As a tenant administrator, I want to manage tenant-specific settings (name, theme,
+  search engine, cache TTL) from the admin panel so that each tenant can be
+  independently configured.
+
+acceptance_criteria:
+  - given: admin navigates to Settings in tenant admin panel
+    when: page loads
+    then: shows current tenant settings (name, connection, search engine, cache config)
+  - given: admin updates a setting and saves
+    when: save completes
+    then: setting is persisted; effect takes place without restart
+  - given: SuperAdmin views all tenants
+    when: tenant list loads
+    then: shows status (Active/Disabled), name, and last modified date for each
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.ITenantService
+  notes: >
+    Tenant settings stored in Orchard Core shell settings (JSON).
+    SuperAdmin panel at /admin/tenants (built-in OC Tenants feature).
+    Per-tenant admin settings accessible only within tenant shell.
+
+permissions_required:
+  - ManageTenants (IsSecurityCritical: true — SuperAdmin only)
+  - ManageSettings (within tenant — tenant admin)
+
+dependencies:
+  - US-1001 (tenant provisioning must exist)

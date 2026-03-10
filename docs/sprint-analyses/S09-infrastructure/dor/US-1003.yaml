@@ -1,0 +1,36 @@
+id: US-1003
+title: Recipe Import/Export
+sprint: S09
+spec: 4.1.10.5, 4.1.10.6
+status: done
+
+description: |
+  As an administrator, I want to import and export configuration recipes so that
+  tenant setup can be automated and replicated across environments.
+
+acceptance_criteria:
+  - given: admin uploads a valid recipe JSON file
+    when: import completes
+    then: content types, roles, and settings defined in recipe are applied to tenant
+  - given: IRecipeService.ImportAsync(stream) is called with valid recipe
+    when: recipe executes
+    then: RecipeImportResultDto shows Success = true and steps applied
+  - given: IRecipeService.ExportCurrentAsync() is called
+    when: tenant has configuration
+    then: returns recipe JSON representing current tenant state
+  - given: admin clicks "Export Recipe" in admin panel
+    when: download completes
+    then: JSON file downloaded with current content types, roles, and settings
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.IRecipeService
+  implementation: ProjectDora.Infrastructure.Services.OrchardRecipeService
+  key_apis:
+    - IRecipeExecutor (OC built-in recipe runner)
+    - IRecipeHarvester (discovers recipe files)
+
+permissions_required:
+  - ManageRecipes (via ManageSettings)
+
+dependencies:
+  - S02 (ContentModeling — content types must exist to export)

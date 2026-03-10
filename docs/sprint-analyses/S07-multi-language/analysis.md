@@ -3,8 +3,7 @@
 ## Kapsam (Scope)
 - Spec items: 4.1.8.1, 4.1.3.4, 4.1.3.5, 4.1.3.8, 4.1.2.12
 - Stories: US-801, US-802, US-803, US-804, US-805, US-806, US-807, US-808
-- Cross-references: S03 (Content Management) established LocalizationPart and AutoroutePart foundations; S04 D-002 (Turkish Analyzer) deferred multi-language search indexing to this sprint; 4.1.10.14 (multi-tenant feature toggles for language activation); 4.1.4.3 (Liquid template localization); 4.1.12.3e/4.1.12.4l (AI chatbot Turkish language support depends on localization infrastructure)
-
+- Cross-references: S03 (Content Management) established LocalizationPart and AutoroutePart foundations; S04 D-002 (Turkish Analyzer) deferred multi-language search indexing to this sprint; 4.1.10.14 (multi-tenant feature toggles for language activation); 4.1.4.3 (Liquid template localization)
 ## Is Analizi Ozeti (Business Analysis Summary)
 
 ### Gereksinimler (Requirements from Teknik Sartname)

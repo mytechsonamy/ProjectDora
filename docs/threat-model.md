@@ -32,7 +32,7 @@ OWASP-aligned threat model for ProjectDora. Identifies threats, attack vectors, 
                          │ ← Trust Boundary 3
 ┌────────────────────────▼────────────────────────────────────┐
 │                    DATA (Most Trusted)                        │
-│  PostgreSQL, Redis, Elasticsearch, MinIO, LLM Models         │
+│  PostgreSQL, Redis, Elasticsearch, MinIO                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -178,7 +178,7 @@ OWASP-aligned threat model for ProjectDora. Identifies threats, attack vectors, 
 | Field | Value |
 |-------|-------|
 | **STRIDE** | D |
-| **Component** | API endpoints, search, AI inference |
+| **Component** | API endpoints, search queries |
 | **Attack Vector** | Request flooding, expensive query abuse, large file upload, deep GraphQL |
 | **Impact** | Platform unavailability |
 | **Likelihood** | Medium |
@@ -190,7 +190,7 @@ OWASP-aligned threat model for ProjectDora. Identifies threats, attack vectors, 
 |---|-----------|----------------|
 | 1 | Rate limiting per user/IP | Configurable per endpoint category |
 | 2 | Request size limits | Max body 10MB, max file 50MB |
-| 3 | Query timeout | 30s for SQL, 10s for search, 30s for AI |
+| 3 | Query timeout | 30s for SQL, 10s for search |
 | 4 | GraphQL depth limiting | Max depth 5, max complexity 1000 |
 | 5 | Pagination required | Max page size 100, default 20 |
 | 6 | Circuit breakers | Polly for all external dependencies |

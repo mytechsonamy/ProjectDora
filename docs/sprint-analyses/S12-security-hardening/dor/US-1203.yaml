@@ -1,0 +1,22 @@
+id: US-1203
+title: Permission Total Count Baseline
+sprint: S12
+spec: Security — RBAC completeness audit
+status: done
+
+description: |
+  As a security auditor, I want to verify that the platform has at least 50 granular
+  permissions so that all RBAC scenarios can be properly covered without resorting
+  to overly broad permissions.
+
+acceptance_criteria:
+  - given: all 10 module IPermissionProvider instances
+    when: all permissions are collected and counted
+    then: total count >= 50
+
+implementation:
+  test_file: tests/ProjectDora.Modules.Tests/Security/PermissionSecurityTests.cs
+  test_method: Security_Permissions_TotalPermissionCount
+  notes: >
+    Platform has 10 modules with an average of 6 permissions each = ~60 total.
+    Range 50-100 is the acceptable band (tested in UAT test too).

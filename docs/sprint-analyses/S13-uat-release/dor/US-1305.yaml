@@ -1,0 +1,22 @@
+id: US-1305
+title: Administrator Has All Permissions Per Module
+sprint: S13
+spec: UAT — role completeness gate
+status: done
+
+description: |
+  As a QA engineer, I want to verify that the Administrator stereotype includes
+  all permissions for each module so that new installs have a fully functional
+  superuser role.
+
+acceptance_criteria:
+  - given: each IPermissionProvider
+    when: Administrator stereotype's Permissions count vs total permissions count
+    then: counts are equal (Administrator has exactly all permissions)
+
+implementation:
+  test_file: tests/ProjectDora.Modules.Tests/Uat/ModuleRegistrationTests.cs
+  test_method: Uat_Modules_AdministratorHasAllPermissionsForEachModule
+  notes: >
+    This test catches regressions where a new permission is added to GetPermissionsAsync()
+    but not added to the Administrator stereotype's permission list.

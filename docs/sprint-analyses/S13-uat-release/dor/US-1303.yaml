@@ -1,0 +1,25 @@
+id: US-1303
+title: Admin Menu Unique Positions
+sprint: S13
+spec: UAT — navigation completeness
+status: done
+
+description: |
+  As a QA engineer, I want to verify that all admin menu providers contribute
+  at least one unique top-level menu item so that the admin panel is fully navigable.
+
+acceptance_criteria:
+  - given: 9 INavigationProvider implementations instantiated
+    when: BuildNavigationAsync("admin", builder) is called for each
+    then: total top-level items >= 9 (each provider adds at least one)
+  - given: multiple menu items
+    when: positions are compared
+    then: no two top-level items share the exact same numeric position
+
+implementation:
+  test_file: tests/ProjectDora.Modules.Tests/Uat/ModuleRegistrationTests.cs
+  test_method: Uat_Modules_AdminMenuItemsHaveUniquePositions
+  notes: >
+    TestLocalizer.For<T>() provides mock IStringLocalizer for navigation providers.
+    Uses CA2012-compliant ValueTask pattern: check IsCompleted before .AsTask().
+    ContentModeling module does not have its own menu (embedded in AdminPanel).

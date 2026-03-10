@@ -1,0 +1,47 @@
+id: US-402
+title: Liquid Template Editing in Admin Panel
+sprint: S11
+spec: 4.1.4.2, 4.1.4.3
+status: done
+
+description: |
+  As an administrator, I want to edit Liquid template files directly in the browser
+  using a code editor so that I can customize the platform's presentation without
+  SSH or file system access.
+
+acceptance_criteria:
+  - given: admin navigates to Templates section in Theme Management
+    when: page loads
+    then: list of all template files in the active theme is displayed
+  - given: admin selects a template file
+    when: editor opens
+    then: Monaco Editor loads with the template content and Liquid syntax highlighting
+  - given: admin edits content and clicks Save
+    when: save completes
+    then: template is saved; IsCustomized = true; changes reflected immediately
+  - given: IThemeService.GetTemplateAsync(themeId, path) is called
+    when: template exists
+    then: returns ThemeTemplateDto with Content and IsCustomized fields
+  - given: IThemeService.SaveTemplateAsync(themeId, command) is called
+    when: command has valid content
+    then: returns updated ThemeTemplateDto with IsCustomized = true
+
+implementation:
+  interface: ProjectDora.Core.Abstractions.IThemeService
+  methods:
+    - GetTemplateAsync
+    - SaveTemplateAsync
+    - ListTemplatesAsync
+  storage: Orchard Core IFileStore (DB-backed, tenant-isolated)
+  editor: Monaco Editor via CDN (requires admin internet access)
+
+permissions_required:
+  - ManageThemes (IsSecurityCritical: true)
+  - ViewThemeEditor (IsSecurityCritical: false)
+
+test_ids:
+  - US-403-01
+  - US-403-02
+
+dependencies:
+  - US-401 (theme must be selected/active first)

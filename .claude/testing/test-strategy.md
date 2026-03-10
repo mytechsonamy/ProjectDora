@@ -167,7 +167,7 @@ commit → build → unit-tests → integration-tests → coverage-check → sec
 | Coverage | >= target per scope (see Section 2) | Security scan |
 | Security Scan | No Critical/High findings | Deploy to test |
 | E2E Tests | 100% pass rate | Performance tests |
-| AI Golden Dataset | >= 90% pass rate | Deploy to staging |
+| E2E Regression | 100% pass rate | Deploy to staging |
 
 ### Reports
 
@@ -179,7 +179,7 @@ commit → build → unit-tests → integration-tests → coverage-check → sec
 ## 9. Cross-References
 
 - **DoR Template**: [definition-of-ready.md](../ai-sdlc/definition-of-ready.md) — acceptance tests feed test generation
-- **Golden Dataset**: [golden-dataset.md](golden-dataset.md) — fixture data for integration and AI tests
+- **Golden Dataset**: [golden-dataset.md](golden-dataset.md) — fixture data for integration and E2E tests
 - **Test Cases**: [test-cases.md](test-cases.md) — full test case registry mapped to spec items
 - **Governance**: [governance.md](../ai-sdlc/governance.md) — test architect agent role and quality gates
 - **Architecture**: `docs/ProjectDora_Architecture_Blueprint.docx` — module boundaries inform test scope

@@ -279,6 +279,6 @@ docker compose -f docker-compose.test.yml up -d
 ## 8. Cross-References
 
 - **Test Strategy**: [test-strategy.md](test-strategy.md) — environments, tooling
-- **Test Cases**: [test-cases.md](test-cases.md) — test cases reference golden dataset fixtures
+- **Test Cases**: [test-cases.md](test-cases.md) — test cases reference golden dataset fixtures for integration and E2E tests
 - **DoR Template**: [definition-of-ready.md](../ai-sdlc/definition-of-ready.md) — story examples use golden dataset entities
 - **Governance**: [governance.md](../ai-sdlc/governance.md) — QA Agent uses golden dataset for validation

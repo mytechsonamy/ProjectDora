@@ -1,0 +1,33 @@
+id: US-1005
+title: XML Sitemap Generation
+sprint: S09
+spec: 4.1.10.10
+status: done
+
+description: |
+  As a platform operator, I want XML sitemaps auto-generated for public content
+  so that search engines can discover and index platform content.
+
+acceptance_criteria:
+  - given: GET /sitemap.xml
+    when: public content items exist
+    then: returns valid XML sitemap with URLs for all public content
+  - given: content item is published
+    when: sitemap is refreshed
+    then: new content URL appears in sitemap within configured TTL
+  - given: content type is excluded from sitemap via config
+    when: sitemap is generated
+    then: that content type's items do not appear
+
+implementation:
+  notes: >
+    Uses Orchard Core's built-in Seo/Sitemap feature.
+    Configurable per content type and tenant.
+    Sitemap cached with TTL; invalidated on publish.
+
+permissions_required:
+  - ManageSettings (for sitemap configuration)
+
+dependencies:
+  - S03 (ContentManagement — published content must exist)
+  - S09-tenant isolation (sitemap is tenant-scoped)

@@ -1,0 +1,25 @@
+id: US-1301
+title: All Platform Modules Registered
+sprint: S13
+spec: UAT — cross-module structural validation
+status: done
+
+description: |
+  As a QA engineer, I want to verify that all 10 platform modules are registered
+  and expose their permission providers so that the system is structurally complete.
+
+acceptance_criteria:
+  - given: AllProviders() instantiates all IPermissionProvider implementations
+    when: count is checked
+    then: exactly 10 providers (AdminPanel, AuditTrail, ContentModeling, Infrastructure,
+          Integration, Localization, QueryEngine, ThemeManagement, UserManagement, Workflows)
+  - given: total permission count across all providers
+    when: summed
+    then: between 50 and 100 permissions (covers all RBAC scenarios)
+
+implementation:
+  test_file: tests/ProjectDora.Modules.Tests/Uat/ModuleRegistrationTests.cs
+  test_method: Uat_Modules_AllTenModulesRegistered
+  notes: >
+    Uses direct instantiation (no DI container) to validate structural completeness.
+    AllProviders() helper is a static array of 10 IPermissionProvider instances.

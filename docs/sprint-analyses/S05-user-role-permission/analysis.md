@@ -3,7 +3,7 @@
 ## Kapsam (Scope)
 - Spec items: 4.1.6.1, 4.1.6.2, 4.1.6.3, 4.1.6.4, 4.1.6.5
 - Stories: US-601, US-602, US-603, US-604, US-605, US-606, US-607, US-608
-- Cross-references: 4.1.1.1 (admin panel auth), 4.1.1.2 (role-based menus), 4.1.3 (content management CRUD), 4.1.5 (query permissions), 4.1.7 (workflow permissions), 4.1.10.8 (multi-tenancy), 4.1.10.22 (OpenID), 4.1.11.4 (API auth), 4.1.11.5 (role-based API access), 4.1.12.2 (AI auth)
+- Cross-references: 4.1.1.1 (admin panel auth), 4.1.1.2 (role-based menus), 4.1.3 (content management CRUD), 4.1.5 (query permissions), 4.1.7 (workflow permissions), 4.1.10.8 (multi-tenancy), 4.1.10.22 (OpenID), 4.1.11.4 (API auth), 4.1.11.5 (role-based API access)
 
 ## Is Analizi Ozeti (Business Analysis Summary)
 
@@ -29,7 +29,7 @@
 - **Permission granularity**: Two levels -- platform-wide (admin panel sections, module features) and content-type-level (CRUD per type)
 - **KVKK/GDPR**: User PII (email, name) classified as personal data. Retention and encryption per data-governance.md.
 - **Audit**: All user/role/permission changes must be audit-logged (spec 4.1.9.1) with actor, timestamp, IP, event type
-- **Offline**: System must function without internet connection (spec 4.1.12.1.i) -- local OpenID token validation
+- **Offline**: System must function without internet connection (spec 4.1.10.22) -- local OpenID token validation
 
 ### RBAC Gereksinimleri (RBAC Requirements Table)
 
